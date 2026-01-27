@@ -87,10 +87,8 @@ export class GrokClient {
         max_tokens: this.defaultMaxTokens,
       };
 
-      // Add search parameters if specified
-      if (searchOptions?.search_parameters) {
-        requestPayload.search_parameters = searchOptions.search_parameters;
-      }
+      // Never send search_parameters - xAI Live Search is deprecated and causes 410 errors
+      // All search must be local (ripgrep/files)
 
       const response =
         await this.client.chat.completions.create(requestPayload);
@@ -118,10 +116,8 @@ export class GrokClient {
         stream: true,
       };
 
-      // Add search parameters if specified
-      if (searchOptions?.search_parameters) {
-        requestPayload.search_parameters = searchOptions.search_parameters;
-      }
+      // Never send search_parameters - xAI Live Search is deprecated and causes 410 errors
+      // All search must be local (ripgrep/files)
 
       const stream = (await this.client.chat.completions.create(
         requestPayload

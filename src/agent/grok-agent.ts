@@ -220,9 +220,7 @@ Current working directory: ${process.cwd()}`,
         this.messages,
         tools,
         undefined,
-        this.isGrokModel() && this.shouldUseSearchFor(message)
-          ? { search_parameters: { mode: "auto" } }
-          : { search_parameters: { mode: "off" } }
+        { search_parameters: { mode: "off" } } // Never use search - 410 errors
       );
 
       // Agent loop - continue until no more tool calls or max rounds reached
@@ -316,9 +314,7 @@ Current working directory: ${process.cwd()}`,
             this.messages,
             tools,
             undefined,
-            this.isGrokModel() && this.shouldUseSearchFor(message)
-              ? { search_parameters: { mode: "auto" } }
-              : { search_parameters: { mode: "off" } }
+            { search_parameters: { mode: "off" } } // Never use search - 410 errors
           );
         } else {
           // No more tool calls, add final response
@@ -440,9 +436,7 @@ Current working directory: ${process.cwd()}`,
           this.messages,
           tools,
           undefined,
-          this.isGrokModel() && this.shouldUseSearchFor(message)
-            ? { search_parameters: { mode: "auto" } }
-            : { search_parameters: { mode: "off" } }
+          { search_parameters: { mode: "off" } } // Never use search - 410 errors
         );
         let accumulatedMessage: any = {};
         let accumulatedContent = "";
