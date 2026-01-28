@@ -1,11 +1,17 @@
-import React from "react";
-import { Box, Text } from "ink";
+import React from 'react';
+import { Box, Text } from 'ink';
 
 interface ChatInputProps {
   input: string;
   cursorPosition: number;
   isProcessing: boolean;
   isStreaming: boolean;
+  onSubmit?: () => void;
+  onEscape?: () => void;
+  onSpecialKey?: (key: any) => boolean;
+  onInputChange?: (text: string) => void;
+  disabled?: boolean;
+  multiline?: boolean;
 }
 
 export function ChatInput({
@@ -18,7 +24,7 @@ export function ChatInput({
   const afterCursor = input.slice(cursorPosition);
 
   // Handle multiline input display
-  const lines = input.split("\n");
+  const lines = input.split('\n');
   const isMultiline = lines.length > 1;
 
   // Calculate cursor position across lines
@@ -36,11 +42,11 @@ export function ChatInput({
   }
 
   const showCursor = !isProcessing && !isStreaming;
-  const borderColor = isProcessing || isStreaming ? "yellow" : "blue";
-  const promptColor = "cyan";
+  const borderColor = isProcessing || isStreaming ? 'yellow' : 'blue';
+  const promptColor = 'cyan';
 
   // Display placeholder when input is empty
-  const placeholderText = "Ask me anything...";
+  const placeholderText = 'Ask me anything...';
   const isPlaceholder = !input;
 
   if (isMultiline) {
@@ -53,12 +59,12 @@ export function ChatInput({
       >
         {lines.map((line, index) => {
           const isCurrentLine = index === currentLineIndex;
-          const promptChar = index === 0 ? "❯" : "│";
+          const promptChar = index === 0 ? '❯' : '│';
 
           if (isCurrentLine) {
             const beforeCursorInLine = line.slice(0, currentCharIndex);
             const cursorChar =
-              line.slice(currentCharIndex, currentCharIndex + 1) || " ";
+              line.slice(currentCharIndex, currentCharIndex + 1) || ' ';
             const afterCursorInLine = line.slice(currentCharIndex + 1);
 
             return (
@@ -71,7 +77,7 @@ export function ChatInput({
                       {cursorChar}
                     </Text>
                   )}
-                  {!showCursor && cursorChar !== " " && cursorChar}
+                  {!showCursor && cursorChar !== ' ' && cursorChar}
                   {afterCursorInLine}
                 </Text>
               </Box>
@@ -90,7 +96,7 @@ export function ChatInput({
   }
 
   // Single line input box
-  const cursorChar = input.slice(cursorPosition, cursorPosition + 1) || " ";
+  const cursorChar = input.slice(cursorPosition, cursorPosition + 1) || ' ';
   const afterCursorText = input.slice(cursorPosition + 1);
 
   return (
@@ -110,7 +116,7 @@ export function ChatInput({
             </Text>
             {showCursor && (
               <Text backgroundColor="white" color="black">
-                {" "}
+                {' '}
               </Text>
             )}
           </>
@@ -122,7 +128,7 @@ export function ChatInput({
                 {cursorChar}
               </Text>
             )}
-            {!showCursor && cursorChar !== " " && cursorChar}
+            {!showCursor && cursorChar !== ' ' && cursorChar}
             {afterCursorText}
           </Text>
         )}
