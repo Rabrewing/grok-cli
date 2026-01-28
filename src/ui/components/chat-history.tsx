@@ -220,14 +220,17 @@ export function ChatHistory({
     : entries;
 
   return (
-    <Box flexDirection="column">
-      {filteredEntries.slice(-20).map((entry, index) => (
-        <MemoizedChatEntry
-          key={`${entry.timestamp.getTime()}-${index}`}
-          entry={entry}
-          index={index}
-        />
-      ))}
+    <Box flexDirection="column" flexGrow={1}>
+      {filteredEntries
+        .slice(-20)
+        .reverse()
+        .map((entry, index) => (
+          <MemoizedChatEntry
+            key={`${entry.timestamp.getTime()}-${index}`}
+            entry={entry}
+            index={index}
+          />
+        ))}
     </Box>
   );
 }

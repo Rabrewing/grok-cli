@@ -31,7 +31,8 @@ export interface SearchParameters {
 }
 
 export interface SearchOptions {
-  search_parameters?: SearchParameters;
+  // NOTE: Never send search_parameters. Live Search is deprecated (410).
+  // Repo "search" is local-only via ripgrep/files.
 }
 
 export interface GrokResponse {
@@ -85,10 +86,8 @@ export class GrokClient {
         tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.7,
         max_tokens: this.defaultMaxTokens,
+        ...searchOptions,
       };
-
-      // Never send search_parameters - xAI Live Search is deprecated and causes 410 errors
-      // All search must be local (ripgrep/files)
 
       const response =
         await this.client.chat.completions.create(requestPayload);
@@ -114,10 +113,8 @@ export class GrokClient {
         temperature: 0.7,
         max_tokens: this.defaultMaxTokens,
         stream: true,
+        ...searchOptions,
       };
-
-      // Never send search_parameters - xAI Live Search is deprecated and causes 410 errors
-      // All search must be local (ripgrep/files)
 
       const stream = (await this.client.chat.completions.create(
         requestPayload
@@ -140,10 +137,13 @@ export class GrokClient {
       content: query,
     };
 
-    const searchOptions: SearchOptions = {
-      search_parameters: searchParameters || { mode: "on" },
-    };
+    // NOTE: Never send search_parameters. Live Search is deprecated (410).
+    // Repo "search" is local-only via ripgrep/files.
+    // const searchOptions: SearchOptions = {
+    //   search_parameters: searchParameters || { mode: "on" },
+    // };
 
-    return this.chat([searchMessage], [], undefined, searchOptions);
+    // NOTE: Never send search_parameters. Live Search is deprecated (410).
+    return this.chat([searchMessage], [], undefined, undefined);
   }
 }

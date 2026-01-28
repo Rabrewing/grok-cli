@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { Agent } from '../agent/index.js';
 import { ToolResult } from '../types/index.js';
 import { ConfirmationService, ConfirmationOptions } from '../utils/confirmation-service.js';
@@ -36,41 +36,8 @@ export default function App({ agent }: Props) {
     confirmationService.resetSession();
   }, []);
 
-  useInput(async (inputChar: string, key: any) => {
-    // If confirmation dialog is open, don't handle normal input
-    if (confirmationOptions) {
-      return;
-    }
-    if (key.ctrl && inputChar === 'c') {
-      process.exit(0);
-      return;
-    }
-
-    if (key.return) {
-      if (input.trim() === 'exit' || input.trim() === 'quit') {
-        process.exit(0);
-        return;
-      }
-
-      if (input.trim()) {
-        setIsProcessing(true);
-        const result = await agent.processCommand(input.trim());
-        setHistory(prev => [...prev, { command: input.trim(), result }]);
-        setInput('');
-        setIsProcessing(false);
-      }
-      return;
-    }
-
-    if (key.backspace || key.delete) {
-      setInput(prev => prev.slice(0, -1));
-      return;
-    }
-
-    if (inputChar && !key.ctrl && !key.meta) {
-      setInput(prev => prev + inputChar);
-    }
-  });
+  // Removed useInput - it was causing raw mode conflicts
+  // Input is now handled by ChatInterface component
 
   const renderResult = (result: ToolResult) => {
     if (result.success) {

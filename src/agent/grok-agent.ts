@@ -220,7 +220,7 @@ Current working directory: ${process.cwd()}`,
         this.messages,
         tools,
         undefined,
-        { search_parameters: { mode: "off" } } // Never use search - 410 errors
+        undefined
       );
 
       // Agent loop - continue until no more tool calls or max rounds reached
@@ -314,7 +314,7 @@ Current working directory: ${process.cwd()}`,
             this.messages,
             tools,
             undefined,
-            { search_parameters: { mode: "off" } } // Never use search - 410 errors
+            undefined
           );
         } else {
           // No more tool calls, add final response
@@ -432,11 +432,12 @@ Current working directory: ${process.cwd()}`,
 
         // Stream response and accumulate
         const tools = await getAllGrokTools();
+        const searchMode = this.isGrokModel() && this.shouldUseSearchFor(message) ? "on" : "off";
         const stream = this.grokClient.chatStream(
           this.messages,
           tools,
           undefined,
-          { search_parameters: { mode: "off" } } // Never use search - 410 errors
+          undefined
         );
         let accumulatedMessage: any = {};
         let accumulatedContent = "";

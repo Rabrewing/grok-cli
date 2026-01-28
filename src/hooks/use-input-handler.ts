@@ -1,8 +1,26 @@
-import { useState, useMemo, useEffect } from "react";
-import { useInput } from "ink";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { GrokAgent, ChatEntry } from "../agent/grok-agent.js";
 import { ConfirmationService } from "../utils/confirmation-service.js";
-import { useEnhancedInput, Key } from "./use-enhanced-input.js";
+import { useInputHandler as useEnhancedInput } from "./use-enhanced-input.js";
+
+interface Key {
+  name?: string;
+  char?: string;
+  return?: boolean;
+  escape?: boolean;
+  tab?: boolean;
+  shift?: boolean;
+  ctrl?: boolean;
+  upArrow?: boolean;
+  downArrow?: boolean;
+  leftArrow?: boolean;
+  rightArrow?: boolean;
+  backspace?: boolean;
+  delete?: boolean;
+  home?: boolean;
+  end?: boolean;
+}
+import { debounce } from "../utils/debounce.js";
 
 import { filterCommandSuggestions } from "../ui/components/command-suggestions.js";
 import { loadModelConfig, updateCurrentModel } from "../utils/model-config.js";
@@ -184,8 +202,9 @@ export function useInputHandler({
     }
   };
 
-  const handleInputChange = (newInput: string) => {
-    // Update command suggestions based on input
+  // NOTE: Don't debounce input buffer - it causes state drift
+  // Instead, debounce only expensive operations if needed
+  const handleInputChange = useCallback((newInput: string) => {
     if (newInput.startsWith("/")) {
       setShowCommandSuggestions(true);
       setSelectedCommandIndex(0);
@@ -193,7 +212,19 @@ export function useInputHandler({
       setShowCommandSuggestions(false);
       setSelectedCommandIndex(0);
     }
-  };
+  }, []);
+
+  // Debounce only the expensive suggestion filtering (not the input buffer)
+  const debouncedSuggestionUpdate = useCallback(
+    debounce((newInput: string) => {
+      // Command suggestions are already handled above, this just ensures
+      // we don't cause re-renders from rapid input changes
+      if (newInput.startsWith("/")) {
+        // Suggestions are already shown, no action needed
+      }
+    }, 30), // 30ms debounce for UI stability
+    []
+  );
 
   const {
     input,
@@ -207,17 +238,11 @@ export function useInputHandler({
     onSubmit: handleInputSubmit,
     onSpecialKey: handleSpecialKey,
     disabled: isConfirmationActive,
+    onInputChange: handleInputChange,
   });
 
-  // Hook up the actual input handling
-  useInput((inputChar: string, key: Key) => {
-    handleInput(inputChar, key);
-  });
-
-  // Update command suggestions when input changes
-  useEffect(() => {
-    handleInputChange(input);
-  }, [input]);
+  // Input handling is now done by ChatInterface component directly
+  // This hook only manages state, not raw input
 
   const commandSuggestions: CommandSuggestion[] = [
     { command: "/help", description: "Show help information" },

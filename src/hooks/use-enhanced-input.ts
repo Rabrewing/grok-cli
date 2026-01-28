@@ -1,66 +1,48 @@
-import { useState, useCallback, useRef } from "react";
-import {
-  deleteCharBefore,
-  deleteCharAfter,
-  deleteWordBefore,
-  deleteWordAfter,
-  insertText,
-  moveToLineStart,
-  moveToLineEnd,
-  moveToPreviousWord,
-  moveToNextWord,
-} from "../utils/text-utils.js";
+import { useState, useCallback } from "react";
 import { useInputHistory } from "./use-input-history.js";
-
-export interface Key {
-  name?: string;
-  ctrl?: boolean;
-  meta?: boolean;
-  shift?: boolean;
-  paste?: boolean;
-  sequence?: string;
-  upArrow?: boolean;
-  downArrow?: boolean;
-  leftArrow?: boolean;
-  rightArrow?: boolean;
-  return?: boolean;
-  escape?: boolean;
-  tab?: boolean;
-  backspace?: boolean;
-  delete?: boolean;
-}
-
-export interface EnhancedInputHook {
-  input: string;
-  cursorPosition: number;
-  isMultiline: boolean;
-  setInput: (text: string) => void;
-  setCursorPosition: (position: number) => void;
-  clearInput: () => void;
-  insertAtCursor: (text: string) => void;
-  resetHistory: () => void;
-  handleInput: (inputChar: string, key: Key) => void;
-}
 
 interface UseEnhancedInputProps {
   onSubmit?: (text: string) => void;
   onEscape?: () => void;
-  onSpecialKey?: (key: Key) => boolean; // Return true to prevent default handling
+  onSpecialKey?: (key: any) => boolean;
+  onInputChange?: (text: string) => void;
   disabled?: boolean;
   multiline?: boolean;
 }
 
-export function useEnhancedInput({
+interface EnhancedInputHook {
+  input: string;
+  cursorPosition: number;
+  showCommandSuggestions: boolean;
+  selectedCommandIndex: number;
+  showModelSelection: boolean;
+  selectedModelIndex: number;
+  handleInput: (key: any) => void;
+  setInput: (text: string) => void;
+  setCursorPosition: (position: number) => void;
+  setShowCommandSuggestions: (show: boolean) => void;
+  setSelectedCommandIndex: (index: number) => void;
+  setShowModelSelection: (show: boolean) => void;
+  setSelectedModelIndex: (index: number) => void;
+  clearInput: () => void;
+  resetHistory: () => void;
+}
+
+export function useInputHandler({
   onSubmit,
   onEscape,
   onSpecialKey,
+  onInputChange,
   disabled = false,
   multiline = false,
-}: UseEnhancedInputProps = {}): EnhancedInputHook {
+}: UseEnhancedInputProps): EnhancedInputHook {
   const [input, setInputState] = useState("");
   const [cursorPosition, setCursorPositionState] = useState(0);
-  const isMultilineRef = useRef(multiline);
-  
+  const [showCommandSuggestions, setShowCommandSuggestions] = useState(false);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+  const [showModelSelection, setShowModelSelection] = useState(false);
+  const [selectedModelIndex, setSelectedModelIndex] = useState(0);
+
   const {
     addToHistory,
     navigateHistory,
@@ -75,7 +57,8 @@ export function useEnhancedInput({
     if (!isNavigatingHistory()) {
       setOriginalInput(text);
     }
-  }, [cursorPosition, isNavigatingHistory, setOriginalInput]);
+    onInputChange?.(text);
+  }, [cursorPosition, isNavigatingHistory, setOriginalInput, onInputChange]);
 
   const setCursorPosition = useCallback((position: number) => {
     setCursorPositionState(Math.max(0, Math.min(input.length, position)));
@@ -84,215 +67,140 @@ export function useEnhancedInput({
   const clearInput = useCallback(() => {
     setInputState("");
     setCursorPositionState(0);
-    setOriginalInput("");
-  }, [setOriginalInput]);
-
-  const insertAtCursor = useCallback((text: string) => {
-    const result = insertText(input, cursorPosition, text);
-    setInputState(result.text);
-    setCursorPositionState(result.position);
-    setOriginalInput(result.text);
-  }, [input, cursorPosition, setOriginalInput]);
-
-  const handleSubmit = useCallback(() => {
-    if (input.trim()) {
-      addToHistory(input);
-      onSubmit?.(input);
-      clearInput();
+    if (!isNavigatingHistory()) {
+      setOriginalInput("");
     }
-  }, [input, addToHistory, onSubmit, clearInput]);
+    onInputChange?.("");
+  }, [setOriginalInput, onInputChange, isNavigatingHistory]);
 
-  const handleInput = useCallback((inputChar: string, key: Key) => {
+  const handleInput = useCallback((key: any) => {
     if (disabled) return;
 
-    // Handle Ctrl+C - check multiple ways it could be detected
-    if ((key.ctrl && inputChar === "c") || inputChar === "\x03") {
-      setInputState("");
-      setCursorPositionState(0);
-      setOriginalInput("");
-      return;
-    }
-
-    // Allow special key handler to override default behavior
-    if (onSpecialKey?.(key)) {
+    // Handle Enter key submission
+    if (key.name === 'return' || key.name === 'enter') {
+      if (input.trim()) {
+        addToHistory(input);
+        onSubmit?.(input);
+        setInput("");
+        setCursorPosition(0);
+      }
       return;
     }
 
     // Handle Escape
-    if (key.escape) {
+    if (key.name === 'escape') {
       onEscape?.();
       return;
     }
 
-    // Handle Enter/Return
-    if (key.return) {
-      if (multiline && key.shift) {
-        // Shift+Enter in multiline mode inserts newline
-        const result = insertText(input, cursorPosition, "\n");
-        setInputState(result.text);
-        setCursorPositionState(result.position);
-        setOriginalInput(result.text);
-      } else {
-        handleSubmit();
+    // Let special key handler take precedence
+    if (onSpecialKey?.(key)) {
+      return;
+    }
+
+    // Handle basic text input
+    if (key.char) {
+      const newInput = input.slice(0, cursorPosition) + key.char + input.slice(cursorPosition);
+      setInput(newInput);
+      setCursorPosition(cursorPosition + 1);
+      return;
+    }
+
+    // Handle backspace
+    if (key.name === 'backspace') {
+      if (cursorPosition > 0) {
+        const newInput = input.slice(0, cursorPosition - 1) + input.slice(cursorPosition);
+        setInput(newInput);
+        setCursorPosition(cursorPosition - 1);
       }
+      return;
+    }
+
+    // Handle delete
+    if (key.name === 'delete') {
+      if (cursorPosition < input.length) {
+        const newInput = input.slice(0, cursorPosition) + input.slice(cursorPosition + 1);
+        setInput(newInput);
+      }
+      return;
+    }
+
+    // Handle arrow keys
+    if (key.name === 'left') {
+      setCursorPosition(Math.max(0, cursorPosition - 1));
+      return;
+    }
+    if (key.name === 'right') {
+      setCursorPosition(Math.min(input.length, cursorPosition + 1));
+      return;
+    }
+    if (key.name === 'home' || (key.name === 'a' && key.ctrl)) {
+      setCursorPosition(0);
+      return;
+    }
+    if (key.name === 'end' || (key.name === 'e' && key.ctrl)) {
+      setCursorPosition(input.length);
       return;
     }
 
     // Handle history navigation
-    if ((key.upArrow || key.name === 'up') && !key.ctrl && !key.meta) {
-      const historyInput = navigateHistory("up");
-      if (historyInput !== null) {
-        setInputState(historyInput);
-        setCursorPositionState(historyInput.length);
-      }
-      return;
-    }
-
-    if ((key.downArrow || key.name === 'down') && !key.ctrl && !key.meta) {
-      const historyInput = navigateHistory("down");
-      if (historyInput !== null) {
-        setInputState(historyInput);
-        setCursorPositionState(historyInput.length);
-      }
-      return;
-    }
-
-    // Handle cursor movement - ignore meta flag for arrows as it's unreliable in terminals
-    // Only do word movement if ctrl is pressed AND no arrow escape sequence is in inputChar
-    if ((key.leftArrow || key.name === 'left') && key.ctrl && !inputChar.includes('[')) {
-      const newPos = moveToPreviousWord(input, cursorPosition);
-      setCursorPositionState(newPos);
-      return;
-    }
-
-    if ((key.rightArrow || key.name === 'right') && key.ctrl && !inputChar.includes('[')) {
-      const newPos = moveToNextWord(input, cursorPosition);
-      setCursorPositionState(newPos);
-      return;
-    }
-
-    // Handle regular cursor movement - single character (ignore meta flag)
-    if (key.leftArrow || key.name === 'left') {
-      const newPos = Math.max(0, cursorPosition - 1);
-      setCursorPositionState(newPos);
-      return;
-    }
-
-    if (key.rightArrow || key.name === 'right') {
-      const newPos = Math.min(input.length, cursorPosition + 1);
-      setCursorPositionState(newPos);
-      return;
-    }
-
-    // Handle Home/End keys or Ctrl+A/E
-    if ((key.ctrl && inputChar === "a") || key.name === "home") {
-      setCursorPositionState(0); // Simple start of input
-      return;
-    }
-
-    if ((key.ctrl && inputChar === "e") || key.name === "end") {
-      setCursorPositionState(input.length); // Simple end of input
-      return;
-    }
-
-    // Handle deletion - check multiple ways backspace might be detected
-    // Backspace can be detected in different ways depending on terminal
-    // In some terminals, backspace shows up as delete:true with empty inputChar
-    const isBackspace = key.backspace || 
-                       key.name === 'backspace' || 
-                       inputChar === '\b' || 
-                       inputChar === '\x7f' ||
-                       (key.delete && inputChar === '' && !key.shift);
-                       
-    if (isBackspace) {
-      if (key.ctrl || key.meta) {
-        // Ctrl/Cmd + Backspace: Delete word before cursor
-        const result = deleteWordBefore(input, cursorPosition);
-        setInputState(result.text);
-        setCursorPositionState(result.position);
-        setOriginalInput(result.text);
+    if (key.name === 'up') {
+      if (showCommandSuggestions) {
+        setSelectedCommandIndex(Math.max(0, selectedCommandIndex - 1));
       } else {
-        // Regular backspace
-        const result = deleteCharBefore(input, cursorPosition);
-        setInputState(result.text);
-        setCursorPositionState(result.position);
-        setOriginalInput(result.text);
+        const newInput = navigateHistory('up');
+        if (newInput !== input) {
+          setInput(newInput);
+          setCursorPosition(newInput.length);
+        }
       }
       return;
     }
-
-    // Handle forward delete (Del key) - but not if it was already handled as backspace above
-    if ((key.delete && inputChar !== '') || (key.ctrl && inputChar === "d")) {
-      if (key.ctrl || key.meta) {
-        // Ctrl/Cmd + Delete: Delete word after cursor
-        const result = deleteWordAfter(input, cursorPosition);
-        setInputState(result.text);
-        setCursorPositionState(result.position);
-        setOriginalInput(result.text);
+    if (key.name === 'down') {
+      if (showCommandSuggestions) {
+        setSelectedCommandIndex(selectedCommandIndex + 1);
       } else {
-        // Regular delete
-        const result = deleteCharAfter(input, cursorPosition);
-        setInputState(result.text);
-        setCursorPositionState(result.position);
-        setOriginalInput(result.text);
+        const newInput = navigateHistory('down');
+        if (newInput !== input) {
+          setInput(newInput);
+          setCursorPosition(newInput.length);
+        }
       }
       return;
     }
-
-    // Handle Ctrl+K: Delete from cursor to end of line
-    if (key.ctrl && inputChar === "k") {
-      const lineEnd = moveToLineEnd(input, cursorPosition);
-      const newText = input.slice(0, cursorPosition) + input.slice(lineEnd);
-      setInputState(newText);
-      setOriginalInput(newText);
-      return;
-    }
-
-    // Handle Ctrl+U: Delete from cursor to start of line
-    if (key.ctrl && inputChar === "u") {
-      const lineStart = moveToLineStart(input, cursorPosition);
-      const newText = input.slice(0, lineStart) + input.slice(cursorPosition);
-      setInputState(newText);
-      setCursorPositionState(lineStart);
-      setOriginalInput(newText);
-      return;
-    }
-
-    // Handle Ctrl+W: Delete word before cursor
-    if (key.ctrl && inputChar === "w") {
-      const result = deleteWordBefore(input, cursorPosition);
-      setInputState(result.text);
-      setCursorPositionState(result.position);
-      setOriginalInput(result.text);
-      return;
-    }
-
-    // Handle Ctrl+X: Clear entire input
-    if (key.ctrl && inputChar === "x") {
-      setInputState("");
-      setCursorPositionState(0);
-      setOriginalInput("");
-      return;
-    }
-
-    // Handle regular character input
-    if (inputChar && !key.ctrl && !key.meta) {
-      const result = insertText(input, cursorPosition, inputChar);
-      setInputState(result.text);
-      setCursorPositionState(result.position);
-      setOriginalInput(result.text);
-    }
-  }, [disabled, onSpecialKey, input, cursorPosition, multiline, handleSubmit, navigateHistory, setOriginalInput]);
+  }, [
+    input, 
+    cursorPosition, 
+    disabled, 
+    showCommandSuggestions, 
+    selectedCommandIndex, 
+    setInput, 
+    setCursorPosition, 
+    addToHistory, 
+    onSubmit, 
+    onEscape, 
+    onSpecialKey,
+    navigateHistory,
+    setSelectedCommandIndex
+  ]);
 
   return {
     input,
     cursorPosition,
-    isMultiline: isMultilineRef.current,
+    showCommandSuggestions,
+    selectedCommandIndex,
+    showModelSelection,
+    selectedModelIndex,
+    handleInput,
     setInput,
     setCursorPosition,
+    setShowCommandSuggestions,
+    setSelectedCommandIndex,
+    setShowModelSelection,
+    setSelectedModelIndex,
     clearInput,
-    insertAtCursor,
     resetHistory,
-    handleInput,
   };
 }
+
+export default useInputHandler;

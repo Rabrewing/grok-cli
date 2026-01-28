@@ -6,6 +6,7 @@ interface ChatInputProps {
   cursorPosition: number;
   isProcessing: boolean;
   isStreaming: boolean;
+  onSubmit?: () => void;
 }
 
 export function ChatInput({
@@ -13,6 +14,7 @@ export function ChatInput({
   cursorPosition,
   isProcessing,
   isStreaming,
+  onSubmit,
 }: ChatInputProps) {
   const beforeCursor = input.slice(0, cursorPosition);
   const afterCursor = input.slice(cursorPosition);
@@ -27,13 +29,19 @@ export function ChatInput({
   let totalChars = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    if (totalChars + lines[i].length >= cursorPosition) {
+    const lineLength = lines[i].length;
+    const lineTotalChars = lineLength + (i > 0 ? 1 : 0); // +1 for newline except first line
+    
+    if (totalChars + lineTotalChars >= cursorPosition) {
       currentLineIndex = i;
       currentCharIndex = cursorPosition - totalChars;
       break;
     }
-    totalChars += lines[i].length + 1; // +1 for newline
+    totalChars += lineTotalChars;
   }
+  
+  // Ensure cursor position is within bounds
+  currentCharIndex = Math.max(0, Math.min(currentCharIndex, lines[currentLineIndex]?.length || 0));
 
   const showCursor = !isProcessing && !isStreaming;
   const borderColor = isProcessing || isStreaming ? "yellow" : "blue";
@@ -58,7 +66,7 @@ export function ChatInput({
           if (isCurrentLine) {
             const beforeCursorInLine = line.slice(0, currentCharIndex);
             const cursorChar =
-              line.slice(currentCharIndex, currentCharIndex + 1) || " ";
+              line.charAt(currentCharIndex) || " ";
             const afterCursorInLine = line.slice(currentCharIndex + 1);
 
             return (
