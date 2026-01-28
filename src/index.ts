@@ -394,10 +394,19 @@ program
       let agent: GrokAgent;
       let repoSnapshot = '';
 
-      if (isRepoMode) {
+        if (isRepoMode) {
         console.log(
           '📁 Repo mode enabled - loading rules and generating snapshot...'
         );
+
+        // Load rules and snapshot for repo mode
+        const detectedRepoRoot = await RepoDetector.detectRepoRoot();
+        const isRepoMode = options.repo || detectedRepoRoot !== null;
+        
+        if (!detectedRepoRoot) {
+          console.error('❌ Error: Repo mode enabled but no git repository found');
+          process.exit(1);
+        }
 
         // Load rules and snapshot for repo mode
         const repoRoot = (await RepoDetector.detectRepoRoot()) || process.cwd();
@@ -408,7 +417,7 @@ program
           repoRoot,
           rulesPrompt
         );
-        repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot);
+        repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot) || '';
 
         console.log(repoSnapshot);
 
@@ -433,7 +442,7 @@ program
           diffMode: options.diff !== false,
           fullFileMode: options.fullFiles || false,
           repoMode: isRepoMode,
-          repoSnapshot,
+          repoSnapshot: repoSnapshot || '',
         })
       );
     } catch (error: any) {
