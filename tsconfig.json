@@ -11,9 +11,8 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "sourceMap": true,
-    "resolveJsonModule": true,
     "jsx": "react",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "noImplicitAny": false
   },
