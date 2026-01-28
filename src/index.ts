@@ -388,8 +388,8 @@ program
       ensureUserSettingsDirectory();
 
       // Check for repo mode
-      const isRepoMode =
-        options.repo || (await RepoDetector.detectRepoRoot()) !== null;
+      const detectedRepoRoot = await RepoDetector.detectRepoRoot();
+      const isRepoMode = options.repo || detectedRepoRoot !== null;
 
       let agent: GrokAgent;
       let repoSnapshot = '';
@@ -401,7 +401,7 @@ program
 
         // Load rules and snapshot for repo mode
         const repoRoot = (await RepoDetector.detectRepoRoot()) || process.cwd();
-        const rules = await RulesResolver.resolveRules(options.rules, repoRoot);
+        const rules = await RulesResolver.resolveRules(options?.rules, repoRoot);
         const sources = rules.map((rule) => rule.source);
         const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
         const snapshot = await SnapshotGenerator.generateSnapshot(
