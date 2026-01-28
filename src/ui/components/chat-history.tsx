@@ -191,11 +191,11 @@ const MemoizedChatEntry = React.memo(
                 <Text color="gray">⎿ {formatToolContent(entry.content, toolName)}</Text>
               )}
             </Box>
-            {shouldShowDiff && !isExecuting && (
-              <Box marginLeft={4} flexDirection="column">
-                {renderDiff(entry.content, filePath)}
-              </Box>
-            )}
+              {shouldShowDiff && !isExecuting && entry.content && (
+                <Box marginLeft={4} flexDirection="column">
+                  {renderDiff(entry.content, filePath)}
+                </Box>
+              )}
           </Box>
         );
 
