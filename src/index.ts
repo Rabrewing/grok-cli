@@ -405,7 +405,7 @@ program
         const sources = rules.map((rule) => rule.source);
         const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
         const snapshot = await SnapshotGenerator.generateSnapshot(
-          undefined,
+          repoRoot,
           rulesPrompt
         );
         repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot);
