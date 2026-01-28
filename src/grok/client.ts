@@ -87,10 +87,8 @@ export class GrokClient {
         max_tokens: this.defaultMaxTokens,
       };
 
-      // Add search parameters if specified
-      if (searchOptions?.search_parameters) {
-        requestPayload.search_parameters = searchOptions.search_parameters;
-      }
+      // NOTE: Do not send search_parameters (deprecated Live Search → 410).
+      // All search is local via SearchTool (ripgrep/files).
 
       const response =
         await this.client.chat.completions.create(requestPayload);
@@ -118,10 +116,8 @@ export class GrokClient {
         stream: true,
       };
 
-      // Add search parameters if specified
-      if (searchOptions?.search_parameters) {
-        requestPayload.search_parameters = searchOptions.search_parameters;
-      }
+      // NOTE: Do not send search_parameters (deprecated Live Search → 410).
+      // All search is local via SearchTool (ripgrep/files).
 
       const stream = (await this.client.chat.completions.create(
         requestPayload

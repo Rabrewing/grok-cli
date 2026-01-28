@@ -1,33 +1,48 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Box, Text } from "ink";
-import { GrokAgent, ChatEntry } from "../../agent/grok-agent.js";
-import { useInputHandler } from "../../hooks/use-input-handler.js";
-import { LoadingSpinner } from "./loading-spinner.js";
-import { CommandSuggestions } from "./command-suggestions.js";
-import { ModelSelection } from "./model-selection.js";
-import { ChatHistory } from "./chat-history.js";
-import { ChatInput } from "./chat-input.js";
-import { MCPStatus } from "./mcp-status.js";
-import ConfirmationDialog from "./confirmation-dialog.js";
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text } from 'ink';
+import { GrokAgent, ChatEntry } from '../../agent/grok-agent.js';
+import { useInputHandler } from '../../hooks/use-input-handler.js';
+import { LoadingSpinner } from './loading-spinner.js';
+import { CommandSuggestions } from './command-suggestions.js';
+import { ModelSelection } from './model-selection.js';
+import { ChatHistory } from './chat-history.js';
+import { ChatInput } from './chat-input.js';
+import { MCPStatus } from './mcp-status.js';
+import ConfirmationDialog from './confirmation-dialog.js';
 import {
   ConfirmationService,
   ConfirmationOptions,
-} from "../../utils/confirmation-service.js";
-import ApiKeyInput from "./api-key-input.js";
-import cfonts from "cfonts";
+} from '../../utils/confirmation-service.js';
+import ApiKeyInput from './api-key-input.js';
+import cfonts from 'cfonts';
 
 interface ChatInterfaceProps {
   agent?: GrokAgent;
   initialMessage?: string;
+  applyMode?: boolean;
+  diffMode?: boolean;
+  fullFileMode?: boolean;
+  repoMode?: boolean;
+  repoSnapshot?: string;
 }
 
 // Main chat component that handles input when agent is available
 function ChatInterfaceWithAgent({
   agent,
   initialMessage,
+  applyMode = false,
+  diffMode = true,
+  fullFileMode = false,
+  repoMode = false,
+  repoSnapshot = '',
 }: {
   agent: GrokAgent;
   initialMessage?: string;
+  applyMode?: boolean;
+  diffMode?: boolean;
+  fullFileMode?: boolean;
+  repoMode?: boolean;
+  repoSnapshot?: string;
 }) {
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -68,9 +83,9 @@ function ChatInterfaceWithAgent({
   useEffect(() => {
     // Only clear console on non-Windows platforms or if not PowerShell
     // Windows PowerShell can have issues with console.clear() causing flickering
-    const isWindows = process.platform === "win32";
+    const isWindows = process.platform === 'win32';
     const isPowerShell =
-      process.env.ComSpec?.toLowerCase().includes("powershell") ||
+      process.env.ComSpec?.toLowerCase().includes('powershell') ||
       process.env.PSModulePath !== undefined;
 
     if (!isWindows || !isPowerShell) {
@@ -78,32 +93,32 @@ function ChatInterfaceWithAgent({
     }
 
     // Add top padding
-    console.log("    ");
+    console.log('    ');
 
     // Generate logo with margin to match Ink paddingX={2}
-    const logoOutput = cfonts.render("GROK", {
-      font: "3d",
-      align: "left",
-      colors: ["magenta", "gray"],
+    const logoOutput = cfonts.render('GROK', {
+      font: '3d',
+      align: 'left',
+      colors: ['magenta', 'gray'],
       space: true,
-      maxLength: "0",
-      gradient: ["magenta", "cyan"],
+      maxLength: '0',
+      gradient: ['magenta', 'cyan'],
       independentGradient: false,
       transitionGradient: true,
-      env: "node",
+      env: 'node',
     });
 
     // Add horizontal margin (2 spaces) to match Ink paddingX={2}
-    const logoLines = (logoOutput as any).string.split("\n");
+    const logoLines = (logoOutput as any).string.split('\n');
     logoLines.forEach((line: string) => {
       if (line.trim()) {
-        console.log(" " + line); // Add 2 spaces for horizontal margin
+        console.log(' ' + line); // Add 2 spaces for horizontal margin
       } else {
         console.log(line); // Keep empty lines as-is
       }
     });
 
-    console.log(" "); // Spacing after logo
+    console.log(' '); // Spacing after logo
 
     setChatHistory([]);
   }, []);
@@ -112,7 +127,7 @@ function ChatInterfaceWithAgent({
   useEffect(() => {
     if (initialMessage && agent) {
       const userEntry: ChatEntry = {
-        type: "user",
+        type: 'user',
         content: initialMessage,
         timestamp: new Date(),
       };
@@ -124,13 +139,15 @@ function ChatInterfaceWithAgent({
 
         try {
           let streamingEntry: ChatEntry | null = null;
-          for await (const chunk of agent.processUserMessageStream(initialMessage)) {
+          for await (const chunk of agent.processUserMessageStream(
+            initialMessage
+          )) {
             switch (chunk.type) {
-              case "content":
+              case 'content':
                 if (chunk.content) {
                   if (!streamingEntry) {
                     const newStreamingEntry = {
-                      type: "assistant" as const,
+                      type: 'assistant' as const,
                       content: chunk.content,
                       timestamp: new Date(),
                       isStreaming: true,
@@ -148,12 +165,12 @@ function ChatInterfaceWithAgent({
                   }
                 }
                 break;
-              case "token_count":
+              case 'token_count':
                 if (chunk.tokenCount !== undefined) {
                   setTokenCount(chunk.tokenCount);
                 }
                 break;
-              case "tool_calls":
+              case 'tool_calls':
                 if (chunk.toolCalls) {
                   // Stop streaming for the current assistant message
                   setChatHistory((prev) =>
@@ -172,8 +189,8 @@ function ChatInterfaceWithAgent({
                   // Add individual tool call entries to show tools are being executed
                   chunk.toolCalls.forEach((toolCall) => {
                     const toolCallEntry: ChatEntry = {
-                      type: "tool_call",
-                      content: "Executing...",
+                      type: 'tool_call',
+                      content: 'Executing...',
                       timestamp: new Date(),
                       toolCall: toolCall,
                     };
@@ -181,7 +198,7 @@ function ChatInterfaceWithAgent({
                   });
                 }
                 break;
-              case "tool_result":
+              case 'tool_result':
                 if (chunk.toolCall && chunk.toolResult) {
                   setChatHistory((prev) =>
                     prev.map((entry) => {
@@ -189,15 +206,15 @@ function ChatInterfaceWithAgent({
                         return { ...entry, isStreaming: false };
                       }
                       if (
-                        entry.type === "tool_call" &&
+                        entry.type === 'tool_call' &&
                         entry.toolCall?.id === chunk.toolCall?.id
                       ) {
                         return {
                           ...entry,
-                          type: "tool_result",
+                          type: 'tool_result',
                           content: chunk.toolResult.success
-                            ? chunk.toolResult.output || "Success"
-                            : chunk.toolResult.error || "Error occurred",
+                            ? chunk.toolResult.output || 'Success'
+                            : chunk.toolResult.error || 'Error occurred',
                           toolResult: chunk.toolResult,
                         };
                       }
@@ -207,11 +224,13 @@ function ChatInterfaceWithAgent({
                   streamingEntry = null;
                 }
                 break;
-              case "done":
+              case 'done':
                 if (streamingEntry) {
                   setChatHistory((prev) =>
                     prev.map((entry) =>
-                      entry.isStreaming ? { ...entry, isStreaming: false } : entry
+                      entry.isStreaming
+                        ? { ...entry, isStreaming: false }
+                        : entry
                     )
                   );
                 }
@@ -221,7 +240,7 @@ function ChatInterfaceWithAgent({
           }
         } catch (error: any) {
           const errorEntry: ChatEntry = {
-            type: "assistant",
+            type: 'assistant',
             content: `Error: ${error.message}`,
             timestamp: new Date(),
           };
@@ -242,11 +261,11 @@ function ChatInterfaceWithAgent({
       setConfirmationOptions(options);
     };
 
-    confirmationService.on("confirmation-requested", handleConfirmationRequest);
+    confirmationService.on('confirmation-requested', handleConfirmationRequest);
 
     return () => {
       confirmationService.off(
-        "confirmation-requested",
+        'confirmation-requested',
         handleConfirmationRequest
       );
     };
@@ -356,11 +375,11 @@ function ChatInterfaceWithAgent({
           <Box flexDirection="row" marginTop={1}>
             <Box marginRight={2}>
               <Text color="cyan">
-                {autoEditEnabled ? "▶" : "⏸"} auto-edit:{" "}
-                {autoEditEnabled ? "on" : "off"}
+                {autoEditEnabled ? '▶' : '⏸'} auto-edit:{' '}
+                {autoEditEnabled ? 'on' : 'off'}
               </Text>
               <Text color="gray" dimColor>
-                {" "}
+                {' '}
                 (shift + tab)
               </Text>
             </Box>
@@ -393,6 +412,11 @@ function ChatInterfaceWithAgent({
 export default function ChatInterface({
   agent,
   initialMessage,
+  applyMode = false,
+  diffMode = true,
+  fullFileMode = false,
+  repoMode = false,
+  repoSnapshot = '',
 }: ChatInterfaceProps) {
   const [currentAgent, setCurrentAgent] = useState<GrokAgent | null>(
     agent || null
@@ -410,6 +434,11 @@ export default function ChatInterface({
     <ChatInterfaceWithAgent
       agent={currentAgent}
       initialMessage={initialMessage}
+      applyMode={applyMode}
+      diffMode={diffMode}
+      fullFileMode={fullFileMode}
+      repoMode={repoMode}
+      repoSnapshot={repoSnapshot}
     />
   );
 }
