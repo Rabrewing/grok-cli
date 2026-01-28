@@ -1,14 +1,18 @@
 #!/usr/bin/env node
-import React from "react";
-import { render } from "ink";
-import { program } from "commander";
-import * as dotenv from "dotenv";
-import { GrokAgent } from "./agent/grok-agent.js";
-import ChatInterface from "./ui/components/chat-interface.js";
-import { getSettingsManager } from "./utils/settings-manager.js";
-import { ConfirmationService } from "./utils/confirmation-service.js";
-import { createMCPCommand } from "./commands/mcp.js";
-import type { ChatCompletionMessageParam } from "openai/resources/chat";
+import React from 'react';
+import { render } from 'ink';
+import { program } from 'commander';
+import * as dotenv from 'dotenv';
+import { GrokAgent } from './agent/grok-agent.js';
+import ChatInterface from './ui/components/chat-interface.js';
+import { getSettingsManager } from './utils/settings-manager.js';
+import { ConfirmationService } from './utils/confirmation-service.js';
+import { createMCPCommand } from './commands/mcp.js';
+import { CommandProcessor } from './commands/index.js';
+import { RepoDetector } from './utils/repo.js';
+import { RulesResolver } from './utils/rules.js';
+import { SnapshotGenerator } from './utils/snapshot.js';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 // Load environment variables
 dotenv.config();
@@ -16,7 +20,7 @@ dotenv.config();
 // Disable default SIGINT handling to let Ink handle Ctrl+C
 // We'll handle exit through the input system instead
 
-process.on("SIGTERM", () => {
+process.on('SIGTERM', () => {
   // Restore terminal to normal mode before exit
   if (process.stdin.isTTY && process.stdin.setRawMode) {
     try {
@@ -25,18 +29,18 @@ process.on("SIGTERM", () => {
       // Ignore errors when setting raw mode
     }
   }
-  console.log("\nGracefully shutting down...");
+  console.log('\nGracefully shutting down...');
   process.exit(0);
 });
 
 // Handle uncaught exceptions to prevent hanging
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught exception:", error);
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
   process.exit(1);
 });
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled rejection at:", promise, "reason:", reason);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
 
@@ -73,17 +77,17 @@ async function saveCommandLineSettings(
 
     // Update with command line values
     if (apiKey) {
-      manager.updateUserSetting("apiKey", apiKey);
-      console.log("✅ API key saved to ~/.grok/user-settings.json");
+      manager.updateUserSetting('apiKey', apiKey);
+      console.log('✅ API key saved to ~/.grok/user-settings.json');
     }
     if (baseURL) {
-      manager.updateUserSetting("baseURL", baseURL);
-      console.log("✅ Base URL saved to ~/.grok/user-settings.json");
+      manager.updateUserSetting('baseURL', baseURL);
+      console.log('✅ Base URL saved to ~/.grok/user-settings.json');
     }
   } catch (error) {
     console.warn(
-      "⚠️ Could not save settings to file:",
-      error instanceof Error ? error.message : "Unknown error"
+      '⚠️ Could not save settings to file:',
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
@@ -118,37 +122,37 @@ async function handleCommitAndPushHeadless(
 
     // Configure confirmation service for headless mode (auto-approve all operations)
     const confirmationService = ConfirmationService.getInstance();
-    confirmationService.setSessionFlag("allOperations", true);
+    confirmationService.setSessionFlag('allOperations', true);
 
-    console.log("🤖 Processing commit and push...\n");
-    console.log("> /commit-and-push\n");
+    console.log('🤖 Processing commit and push...\n');
+    console.log('> /commit-and-push\n');
 
     // First check if there are any changes at all
     const initialStatusResult = await agent.executeBashCommand(
-      "git status --porcelain"
+      'git status --porcelain'
     );
 
     if (!initialStatusResult.success || !initialStatusResult.output?.trim()) {
-      console.log("❌ No changes to commit. Working directory is clean.");
+      console.log('❌ No changes to commit. Working directory is clean.');
       process.exit(1);
     }
 
-    console.log("✅ git status: Changes detected");
+    console.log('✅ git status: Changes detected');
 
     // Add all changes
-    const addResult = await agent.executeBashCommand("git add .");
+    const addResult = await agent.executeBashCommand('git add .');
 
     if (!addResult.success) {
       console.log(
-        `❌ git add: ${addResult.error || "Failed to stage changes"}`
+        `❌ git add: ${addResult.error || 'Failed to stage changes'}`
       );
       process.exit(1);
     }
 
-    console.log("✅ git add: Changes staged");
+    console.log('✅ git add: Changes staged');
 
     // Get staged changes for commit message generation
-    const diffResult = await agent.executeBashCommand("git diff --cached");
+    const diffResult = await agent.executeBashCommand('git diff --cached');
 
     // Generate commit message using AI
     const commitPrompt = `Generate a concise, professional git commit message for these changes:
@@ -157,31 +161,31 @@ Git Status:
 ${initialStatusResult.output}
 
 Git Diff (staged changes):
-${diffResult.output || "No staged changes shown"}
+${diffResult.output || 'No staged changes shown'}
 
 Follow conventional commit format (feat:, fix:, docs:, etc.) and keep it under 72 characters.
 Respond with ONLY the commit message, no additional text.`;
 
-    console.log("🤖 Generating commit message...");
+    console.log('🤖 Generating commit message...');
 
     const commitMessageEntries = await agent.processUserMessage(commitPrompt);
-    let commitMessage = "";
+    let commitMessage = '';
 
     // Extract the commit message from the AI response
     for (const entry of commitMessageEntries) {
-      if (entry.type === "assistant" && entry.content.trim()) {
+      if (entry.type === 'assistant' && entry.content.trim()) {
         commitMessage = entry.content.trim();
         break;
       }
     }
 
     if (!commitMessage) {
-      console.log("❌ Failed to generate commit message");
+      console.log('❌ Failed to generate commit message');
       process.exit(1);
     }
 
     // Clean the commit message
-    const cleanCommitMessage = commitMessage.replace(/^["']|["']$/g, "");
+    const cleanCommitMessage = commitMessage.replace(/^["']|["']$/g, '');
     console.log(`✅ Generated commit message: "${cleanCommitMessage}"`);
 
     // Execute the commit
@@ -191,38 +195,38 @@ Respond with ONLY the commit message, no additional text.`;
     if (commitResult.success) {
       console.log(
         `✅ git commit: ${
-          commitResult.output?.split("\n")[0] || "Commit successful"
+          commitResult.output?.split('\n')[0] || 'Commit successful'
         }`
       );
 
       // If commit was successful, push to remote
       // First try regular push, if it fails try with upstream setup
-      let pushResult = await agent.executeBashCommand("git push");
+      let pushResult = await agent.executeBashCommand('git push');
 
       if (
         !pushResult.success &&
-        pushResult.error?.includes("no upstream branch")
+        pushResult.error?.includes('no upstream branch')
       ) {
-        console.log("🔄 Setting upstream and pushing...");
-        pushResult = await agent.executeBashCommand("git push -u origin HEAD");
+        console.log('🔄 Setting upstream and pushing...');
+        pushResult = await agent.executeBashCommand('git push -u origin HEAD');
       }
 
       if (pushResult.success) {
         console.log(
           `✅ git push: ${
-            pushResult.output?.split("\n")[0] || "Push successful"
+            pushResult.output?.split('\n')[0] || 'Push successful'
           }`
         );
       } else {
-        console.log(`❌ git push: ${pushResult.error || "Push failed"}`);
+        console.log(`❌ git push: ${pushResult.error || 'Push failed'}`);
         process.exit(1);
       }
     } else {
-      console.log(`❌ git commit: ${commitResult.error || "Commit failed"}`);
+      console.log(`❌ git commit: ${commitResult.error || 'Commit failed'}`);
       process.exit(1);
     }
   } catch (error: any) {
-    console.error("❌ Error during commit and push:", error.message);
+    console.error('❌ Error during commit and push:', error.message);
     process.exit(1);
   }
 }
@@ -240,7 +244,7 @@ async function processPromptHeadless(
 
     // Configure confirmation service for headless mode (auto-approve all operations)
     const confirmationService = ConfirmationService.getInstance();
-    confirmationService.setSessionFlag("allOperations", true);
+    confirmationService.setSessionFlag('allOperations', true);
 
     // Process the user message
     const chatEntries = await agent.processUserMessage(prompt);
@@ -250,16 +254,16 @@ async function processPromptHeadless(
 
     for (const entry of chatEntries) {
       switch (entry.type) {
-        case "user":
+        case 'user':
           messages.push({
-            role: "user",
+            role: 'user',
             content: entry.content,
           });
           break;
 
-        case "assistant":
+        case 'assistant':
           const assistantMessage: ChatCompletionMessageParam = {
-            role: "assistant",
+            role: 'assistant',
             content: entry.content,
           };
 
@@ -267,7 +271,7 @@ async function processPromptHeadless(
           if (entry.toolCalls && entry.toolCalls.length > 0) {
             assistantMessage.tool_calls = entry.toolCalls.map((toolCall) => ({
               id: toolCall.id,
-              type: "function",
+              type: 'function',
               function: {
                 name: toolCall.function.name,
                 arguments: toolCall.function.arguments,
@@ -276,16 +280,6 @@ async function processPromptHeadless(
           }
 
           messages.push(assistantMessage);
-          break;
-
-        case "tool_result":
-          if (entry.toolCall) {
-            messages.push({
-              role: "tool",
-              tool_call_id: entry.toolCall.id,
-              content: entry.content,
-            });
-          }
           break;
       }
     }
@@ -298,7 +292,7 @@ async function processPromptHeadless(
     // Output error in OpenAI compatible format
     console.log(
       JSON.stringify({
-        role: "assistant",
+        role: 'assistant',
         content: `Error: ${error.message}`,
       })
     );
@@ -306,31 +300,43 @@ async function processPromptHeadless(
   }
 }
 
+// Main program
 program
-  .name("grok")
+  .name('grok')
   .description(
-    "A conversational AI CLI tool powered by Grok with text editor capabilities"
+    'A conversational AI CLI tool powered by Grok with text editor capabilities'
   )
-  .version("1.0.1")
-  .argument("[message...]", "Initial message to send to Grok")
-  .option("-d, --directory <dir>", "set working directory", process.cwd())
-  .option("-k, --api-key <key>", "Grok API key (or set GROK_API_KEY env var)")
+  .version('1.0.1')
+  .argument('[message...]', 'Initial message to send to Grok')
+  .option('-d, --directory <dir>', 'set working directory', process.cwd())
+  .option('-k, --api-key <key>', 'Grok API key (or set GROK_API_KEY env var)')
   .option(
-    "-u, --base-url <url>",
-    "Grok API base URL (or set GROK_BASE_URL env var)"
-  )
-  .option(
-    "-m, --model <model>",
-    "AI model to use (e.g., grok-code-fast-1, grok-4-latest) (or set GROK_MODEL env var)"
+    '-u, --base-url <url>',
+    'Grok API base URL (or set GROK_BASE_URL env var)'
   )
   .option(
-    "-p, --prompt <prompt>",
-    "process a single prompt and exit (headless mode)"
+    '-m, --model <model>',
+    'AI model to use (e.g., grok-code-fast-1, grok-4-latest) (or set GROK_MODEL env var)'
   )
   .option(
-    "--max-tool-rounds <rounds>",
-    "maximum number of tool execution rounds (default: 400)",
-    "400"
+    '-p, --prompt <prompt>',
+    'process a single prompt and exit (headless mode)'
+  )
+  .option('--repo', 'enable repo coding mode (auto when inside git repo)')
+  .option('--rules <path>', 'use specific rules file path')
+  .option('--snapshot', 'include repo snapshot at session start')
+  .option('--diff', 'output unified diffs (default behavior)')
+  .option('--full-files', 'output full file contents instead of diffs')
+  .option('--apply', 'apply file changes automatically when making edits')
+  .option('--yes', 'skip confirmation prompts for apply operations')
+  .option(
+    '--dry-run',
+    'ensures no file writes unless --apply or explicit interactive accept'
+  )
+  .option(
+    '--max-tool-rounds <rounds>',
+    'maximum number of tool execution rounds (default: 400)',
+    '400'
   )
   .action(async (message, options) => {
     if (options.directory) {
@@ -354,7 +360,7 @@ program
 
       if (!apiKey) {
         console.error(
-          "❌ Error: API key required. Set GROK_API_KEY environment variable, use --api-key flag, or set \"apiKey\" field in ~/.grok/user-settings.json"
+          '❌ Error: API key required. Set GROK_API_KEY environment variable, use --api-key flag, or set "apiKey" field in ~/.grok/user-settings.json'
         );
         process.exit(1);
       }
@@ -377,45 +383,87 @@ program
       }
 
       // Interactive mode: launch UI
-      const agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
-      console.log("🤖 Starting Grok CLI Conversational Assistant...\n");
+      console.log('🤖 Starting Grok CLI Conversational Assistant...\n');
 
       ensureUserSettingsDirectory();
 
+      // Check for repo mode
+      const isRepoMode =
+        options.repo || (await RepoDetector.detectRepoRoot()) !== null;
+
+      let agent: GrokAgent;
+      let repoSnapshot = '';
+
+      if (isRepoMode) {
+        console.log(
+          '📁 Repo mode enabled - loading rules and generating snapshot...'
+        );
+
+        // Load rules and snapshot for repo mode
+        const repoRoot = (await RepoDetector.detectRepoRoot()) || process.cwd();
+        const rules = await RulesResolver.resolveRules(options.rules, repoRoot);
+        const sources = rules.map((rule) => rule.source);
+        const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
+        const snapshot = await SnapshotGenerator.generateSnapshot(
+          undefined,
+          rulesPrompt
+        );
+        repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot);
+
+        console.log(repoSnapshot);
+
+        // Set max tool rounds to 0 for repo mode (local tools only)
+        const repoModeMaxToolRounds = 0;
+
+        agent = new GrokAgent(apiKey, baseURL, model, repoModeMaxToolRounds);
+      } else {
+        agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
+      }
+
       // Support variadic positional arguments for multi-word initial message
       const initialMessage = Array.isArray(message)
-        ? message.join(" ")
+        ? message.join(' ')
         : message;
 
-      render(React.createElement(ChatInterface, { agent, initialMessage }));
+      render(
+        React.createElement(ChatInterface, {
+          agent,
+          initialMessage,
+          applyMode: options.apply || false,
+          diffMode: options.diff !== false,
+          fullFileMode: options.fullFiles || false,
+          repoMode: isRepoMode,
+          repoSnapshot,
+        })
+      );
     } catch (error: any) {
-      console.error("❌ Error initializing Grok CLI:", error.message);
+      console.error('❌ Error initializing Grok CLI:', error.message);
       process.exit(1);
     }
   });
 
 // Git subcommand
 const gitCommand = program
-  .command("git")
-  .description("Git operations with AI assistance");
+  .command('git')
+  .description('Git operations with AI assistance');
 
 gitCommand
-  .command("commit-and-push")
-  .description("Generate AI commit message and push to remote")
-  .option("-d, --directory <dir>", "set working directory", process.cwd())
-  .option("-k, --api-key <key>", "Grok API key (or set GROK_API_KEY env var)")
+  .command('commit-and-push')
+  .description('Generate AI commit message and push to remote')
+  .option('-d, --directory <dir>', 'set working directory', process.cwd())
+  .option('-k, --api-key <key>', 'Grok API key (or set GROK_API_KEY env var)')
   .option(
-    "-u, --base-url <url>",
-    "Grok API base URL (or set GROK_BASE_URL env var)"
+    '-u, --base-url <url>',
+    'Grok API base URL (or set GROK_BASE_URL env var)'
   )
   .option(
-    "-m, --model <model>",
-    "AI model to use (e.g., grok-code-fast-1, grok-4-latest) (or set GROK_MODEL env var)"
+    '-m, --model <model>',
+    'AI model to use (e.g., grok-code-fast-1, grok-4-latest) (or set GROK_MODEL env var)'
   )
   .option(
-    "--max-tool-rounds <rounds>",
-    "maximum number of tool execution rounds (default: 400)",
-    "400"
+    '--max-tool-rounds <rounds>',
+    'maximum number of tool execution rounds (default: 400)',
+    '400'
   )
   .action(async (options) => {
     if (options.directory) {
@@ -439,7 +487,7 @@ gitCommand
 
       if (!apiKey) {
         console.error(
-          "❌ Error: API key required. Set GROK_API_KEY environment variable, use --api-key flag, or save to ~/.grok/user-settings.json"
+          '❌ Error: API key required. Set GROK_API_KEY environment variable, use --api-key flag, or save to ~/.grok/user-settings.json'
         );
         process.exit(1);
       }
@@ -451,12 +499,67 @@ gitCommand
 
       await handleCommitAndPushHeadless(apiKey, baseURL, model, maxToolRounds);
     } catch (error: any) {
-      console.error("❌ Error during git commit-and-push:", error.message);
+      console.error('❌ Error during git commit-and-push:', error.message);
       process.exit(1);
     }
   });
 
-// MCP command
+// Create repo mode commands
+const snapCommand = program
+  .command('snap')
+  .description('Generate a repository snapshot')
+  .option('--rules <path>', 'use specific rules file path')
+  .action(async (options) => {
+    try {
+      const repoRoot = (await RepoDetector.detectRepoRoot()) || process.cwd();
+      const rules = await RulesResolver.resolveRules(options.rules, repoRoot);
+      const sources = rules.map((rule) => rule.source);
+      const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
+      const snapshot = await SnapshotGenerator.generateSnapshot(
+        repoRoot,
+        rulesPrompt
+      );
+      const output = SnapshotGenerator.formatSnapshot(snapshot);
+      console.log(output);
+    } catch (error: any) {
+      console.error('❌ Error generating snapshot:', error.message);
+      process.exit(1);
+    }
+  });
+
+const ticketCommand = program
+  .command('ticket <task>')
+  .description('Generate a structured ticket for a given task')
+  .option('--rules <path>', 'use specific rules file path')
+  .action(async (task, options) => {
+    try {
+      const rules = await RulesResolver.resolveRules(options.rules, undefined);
+      const sources = rules.map((rule) => rule.source);
+      const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
+      const ticket = await CommandProcessor.handleTicketCommand(task);
+      console.log(ticket);
+    } catch (error: any) {
+      console.error('❌ Error generating ticket:', error.message);
+      process.exit(1);
+    }
+  });
+
+const patchCommand = program
+  .command('patch')
+  .description('Apply suggested changes from the last ticket')
+  .action(async () => {
+    try {
+      await CommandProcessor.handlePatchCommand();
+    } catch (error: any) {
+      console.error('❌ Error applying patch:', error.message);
+      process.exit(1);
+    }
+  });
+
+// Add MCP and repo mode commands
 program.addCommand(createMCPCommand());
+program.addCommand(snapCommand);
+program.addCommand(ticketCommand);
+program.addCommand(patchCommand);
 
 program.parse();
