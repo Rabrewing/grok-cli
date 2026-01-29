@@ -44,6 +44,10 @@ function ChatInterfaceWithAgent({
   repoMode?: boolean;
   repoSnapshot?: string;
 }) {
+  // Add streaming buffer to reduce React state updates
+  const streamBufferRef = useRef<string>('');
+  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTime, setProcessingTime] = useState(0);
