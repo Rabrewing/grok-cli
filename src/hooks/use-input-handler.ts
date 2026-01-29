@@ -618,9 +618,29 @@ Respond with ONLY the commit message, no additional text.`;
     setIsProcessing(true);
     clearInput();
 
+    let flushTimer: NodeJS.Timeout | null = null;
+
     try {
       setIsStreaming(true);
       let streamingEntry: ChatEntry | null = null;
+      let streamBuffer = '';
+
+      const flushBuffer = () => {
+        if (streamBuffer && streamingEntry) {
+          setChatHistory((prev) =>
+            prev.map((entry, idx) =>
+              idx === prev.length - 1 && entry.isStreaming
+                ? { ...entry, content: entry.content + streamBuffer }
+                : entry
+            )
+          );
+          streamBuffer = '';
+        }
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+      };
 
       for await (const chunk of agent.processUserMessageStream(userInput)) {
         switch (chunk.type) {
@@ -636,13 +656,12 @@ Respond with ONLY the commit message, no additional text.`;
                 setChatHistory((prev) => [...prev, newStreamingEntry]);
                 streamingEntry = newStreamingEntry;
               } else {
-                setChatHistory((prev) =>
-                  prev.map((entry, idx) =>
-                    idx === prev.length - 1 && entry.isStreaming
-                      ? { ...entry, content: entry.content + chunk.content }
-                      : entry
-                  )
-                );
+                // Buffer chunks and flush at intervals to prevent flicker
+                streamBuffer += chunk.content;
+
+                if (!flushTimer) {
+                  flushTimer = setTimeout(flushBuffer, 75); // 75ms flush cadence
+                }
               }
             }
             break;
@@ -655,18 +674,34 @@ Respond with ONLY the commit message, no additional text.`;
 
           case "tool_calls":
             if (chunk.toolCalls) {
-              // Stop streaming for the current assistant message
-              setChatHistory((prev) =>
-                prev.map((entry) =>
-                  entry.isStreaming
-                    ? {
-                        ...entry,
-                        isStreaming: false,
-                        toolCalls: chunk.toolCalls,
-                      }
-                    : entry
-                )
-              );
+              // Flush any buffered content before stopping streaming
+              if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+              }
+              if (streamBuffer && streamingEntry) {
+                setChatHistory((prev) =>
+                  prev.map((entry, idx) =>
+                    idx === prev.length - 1 && entry.isStreaming
+                      ? { ...entry, content: entry.content + streamBuffer, isStreaming: false, toolCalls: chunk.toolCalls }
+                      : entry
+                  )
+                );
+                streamBuffer = '';
+              } else {
+                // Stop streaming for the current assistant message
+                setChatHistory((prev) =>
+                  prev.map((entry) =>
+                    entry.isStreaming
+                      ? {
+                          ...entry,
+                          isStreaming: false,
+                          toolCalls: chunk.toolCalls,
+                        }
+                      : entry
+                  )
+                );
+              }
               streamingEntry = null;
 
               // Add individual tool call entries to show tools are being executed
@@ -711,7 +746,21 @@ Respond with ONLY the commit message, no additional text.`;
             break;
 
           case "done":
-            if (streamingEntry) {
+            // Flush any remaining buffered content
+            if (flushTimer) {
+              clearTimeout(flushTimer);
+              flushTimer = null;
+            }
+            if (streamBuffer && streamingEntry) {
+              setChatHistory((prev) =>
+                prev.map((entry, idx) =>
+                  idx === prev.length - 1 && entry.isStreaming
+                    ? { ...entry, content: entry.content + streamBuffer, isStreaming: false }
+                    : entry
+                )
+              );
+              streamBuffer = '';
+            } else if (streamingEntry) {
               setChatHistory((prev) =>
                 prev.map((entry) =>
                   entry.isStreaming ? { ...entry, isStreaming: false } : entry
@@ -723,6 +772,11 @@ Respond with ONLY the commit message, no additional text.`;
         }
       }
     } catch (error: any) {
+      // Clean up any pending buffer/timer on error
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
       const errorEntry: ChatEntry = {
         type: "assistant",
         content: `Error: ${error.message}`,

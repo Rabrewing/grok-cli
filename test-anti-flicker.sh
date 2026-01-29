@@ -10,19 +10,19 @@ failed=0
 
 # Test 1: Verify buffering implementation
 echo "📊 Test 1: Check streaming buffer implementation"
-if grep -q "streamBufferRef" src/ui/components/chat-interface.tsx; then
-    echo "✅ Streaming buffer ref implemented"
+if grep -q "streamBuffer" src/hooks/use-input-handler.ts; then
+    echo "✅ Streaming buffer implemented in hook"
     ((passed++))
 else
-    echo "❌ Streaming buffer ref missing"
+    echo "❌ Streaming buffer missing from hook"
     ((failed++))
 fi
 
-if grep -q "flushTimerRef" src/ui/components/chat-interface.tsx; then
-    echo "✅ Flush timer ref implemented"
+if grep -q "flushTimer" src/hooks/use-input-handler.ts; then
+    echo "✅ Flush timer implemented in hook"
     ((passed++))
 else
-    echo "❌ Flush timer ref missing"
+    echo "❌ Flush timer missing from hook"
     ((failed++))
 fi
 
