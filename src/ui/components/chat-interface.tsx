@@ -46,37 +46,7 @@ function ChatInterfaceWithAgent({
   repoSnapshot?: string;
 }) {
   // Add streaming buffer to reduce React state updates
-  const streamBufferRef = useRef<string>('');
-  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Flush buffered streaming content to React state
-  const flushStreamBuffer = useCallback(() => {
-    if (streamBufferRef.current) {
-      setChatHistory(prev => {
-        const newHistory = [...prev];
-        const lastEntry = newHistory[newHistory.length - 1];
-        if (lastEntry && lastEntry.type === 'assistant' && lastEntry.isStreaming) {
-          lastEntry.content += streamBufferRef.current;
-        }
-        return newHistory;
-      });
-      streamBufferRef.current = '';
-    }
-    if (flushTimerRef.current) {
-      clearTimeout(flushTimerRef.current);
-      flushTimerRef.current = null;
-    }
-  }, []);
 
-  // Handle incoming streaming chunks with buffering
-  const handleStreamingChunk = useCallback((chunk: string) => {
-    streamBufferRef.current += chunk;
-    
-    // Start flush timer if not already running
-    if (!flushTimerRef.current) {
-      flushTimerRef.current = setTimeout(flushStreamBuffer, 75); // Flush every 75ms
-    }
-  }, [flushStreamBuffer]);
   
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
