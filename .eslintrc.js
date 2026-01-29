@@ -9,6 +9,7 @@ module.exports = {
     node: true,
     es6: true,
   },
+  ignorePatterns: ['dist/**/*', 'node_modules/**/*'],
   rules: {
     '@typescript-eslint/no-unused-vars': 'error',
     '@typescript-eslint/no-explicit-any': 'warn',
