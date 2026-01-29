@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { GrokAgent, ChatEntry } from '../../agent/grok-agent.js';
 import { useInputHandler } from '../../hooks/use-input-handler.js';
@@ -47,6 +48,35 @@ function ChatInterfaceWithAgent({
   // Add streaming buffer to reduce React state updates
   const streamBufferRef = useRef<string>('');
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Flush buffered streaming content to React state
+  const flushStreamBuffer = useCallback(() => {
+    if (streamBufferRef.current) {
+      setChatHistory(prev => {
+        const newHistory = [...prev];
+        const lastEntry = newHistory[newHistory.length - 1];
+        if (lastEntry && lastEntry.type === 'assistant' && lastEntry.isStreaming) {
+          lastEntry.content += streamBufferRef.current;
+        }
+        return newHistory;
+      });
+      streamBufferRef.current = '';
+    }
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, []);
+
+  // Handle incoming streaming chunks with buffering
+  const handleStreamingChunk = useCallback((chunk: string) => {
+    streamBufferRef.current += chunk;
+    
+    // Start flush timer if not already running
+    if (!flushTimerRef.current) {
+      flushTimerRef.current = setTimeout(flushStreamBuffer, 75); // Flush every 75ms
+    }
+  }, [flushStreamBuffer]);
   
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -148,26 +178,21 @@ function ChatInterfaceWithAgent({
           )) {
             switch (chunk.type) {
               case 'content':
-                if (chunk.content) {
-                  if (!streamingEntry) {
-                    const newStreamingEntry = {
-                      type: 'assistant' as const,
-                      content: chunk.content,
-                      timestamp: new Date(),
-                      isStreaming: true,
-                    };
-                    setChatHistory((prev) => [...prev, newStreamingEntry]);
-                    streamingEntry = newStreamingEntry;
-                  } else {
-                    setChatHistory((prev) =>
-                      prev.map((entry, idx) =>
-                        idx === prev.length - 1 && entry.isStreaming
-                          ? { ...entry, content: entry.content + chunk.content }
-                          : entry
-                      )
-                    );
+                  if (chunk.content) {
+                    if (!streamingEntry) {
+                      const newStreamingEntry = {
+                        type: 'assistant' as const,
+                        content: chunk.content,
+                        timestamp: new Date(),
+                        isStreaming: true,
+                      };
+                      setChatHistory((prev) => [...prev, newStreamingEntry]);
+                      streamingEntry = newStreamingEntry;
+                    } else {
+                      // Buffer the content instead of immediate state update
+                      handleStreamingChunk(chunk.content);
+                    }
                   }
-                }
                 break;
               case 'token_count':
                 if (chunk.tokenCount !== undefined) {
