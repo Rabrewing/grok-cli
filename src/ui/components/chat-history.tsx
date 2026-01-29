@@ -9,6 +9,9 @@ interface ChatHistoryProps {
   isConfirmationActive?: boolean;
 }
 
+// Render window cap to prevent excessive re-renders
+const MAX_ENTRIES_RENDERED = 25;
+
 // Memoized ChatEntry component to prevent unnecessary re-renders
 const MemoizedChatEntry = React.memo(
   ({ entry, index }: { entry: ChatEntry; index: number }) => {
@@ -218,14 +221,17 @@ export function ChatHistory({
           !(entry.type === "tool_call" && entry.content === "Executing...")
       )
     : entries;
+  
+  // Apply render windowing - only show last MAX_ENTRIES_RENDERED entries
+  const visibleEntries = filteredEntries.slice(-MAX_ENTRIES_RENDERED);
 
   return (
     <Box flexDirection="column">
-      {filteredEntries.slice(-20).map((entry, index) => (
+      {visibleEntries.map((entry, index) => (
         <MemoizedChatEntry
           key={`${entry.timestamp.getTime()}-${index}`}
           entry={entry}
-          index={index}
+          index={filteredEntries.length - MAX_ENTRIES_RENDERED + index}
         />
       ))}
     </Box>
