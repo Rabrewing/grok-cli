@@ -3,6 +3,7 @@ import { useInput } from "ink";
 import { GrokAgent, ChatEntry } from "../agent/grok-agent.js";
 import { ConfirmationService } from "../utils/confirmation-service.js";
 import { useEnhancedInput, Key } from "./use-enhanced-input.js";
+import { streamWriter } from "../ui/stream-writer.js";
 
 import { filterCommandSuggestions } from "../ui/components/command-suggestions.js";
 import { loadModelConfig, updateCurrentModel } from "../utils/model-config.js";
@@ -89,6 +90,10 @@ export function useInputHandler({
       }
       if (isProcessing || isStreaming) {
         agent.abortCurrentOperation();
+        // Ensure stream writer is aborted to clean up terminal state
+        if (streamWriter.isStreaming()) {
+          streamWriter.abortStream();
+        }
         setIsProcessing(false);
         setIsStreaming(false);
         setTokenCount(0);
@@ -236,6 +241,12 @@ export function useInputHandler({
     const trimmedInput = input.trim();
 
     if (trimmedInput === "/clear") {
+      // Abort any ongoing streaming to clean up terminal state
+      if (streamWriter.isStreaming()) {
+        streamWriter.abortStream();
+      }
+      agent.abortCurrentOperation();
+
       // Reset chat history
       setChatHistory([]);
 
@@ -427,53 +438,48 @@ ${diffResult.output || "No staged changes shown"}
 Follow conventional commit format (feat:, fix:, docs:, etc.) and keep it under 72 characters.
 Respond with ONLY the commit message, no additional text.`;
 
+        // Use Hybrid Renderer for commit message generation
         let commitMessage = "";
-        let streamingEntry: ChatEntry | null = null;
+        let sessionId: string | null = null;
+
+        // Add initial status entry
+        const statusEntry: ChatEntry = {
+          type: "assistant",
+          content: "Generating commit message...",
+          timestamp: new Date(),
+        };
+        setChatHistory((prev) => [...prev, statusEntry]);
 
         for await (const chunk of agent.processUserMessageStream(
           commitPrompt
         )) {
           if (chunk.type === "content" && chunk.content) {
-            if (!streamingEntry) {
-              const newEntry = {
-                type: "assistant" as const,
-                content: `Generating commit message...\n\n${chunk.content}`,
-                timestamp: new Date(),
-                isStreaming: true,
-              };
-              setChatHistory((prev) => [...prev, newEntry]);
-              streamingEntry = newEntry;
-              commitMessage = chunk.content;
-            } else {
-              commitMessage += chunk.content;
-              setChatHistory((prev) =>
-                prev.map((entry, idx) =>
-                  idx === prev.length - 1 && entry.isStreaming
-                    ? {
-                        ...entry,
-                        content: `Generating commit message...\n\n${commitMessage}`,
-                      }
-                    : entry
-                )
-              );
+            if (!sessionId) {
+              sessionId = streamWriter.beginAssistantStream();
             }
+            streamWriter.writeChunk(chunk.content);
+            commitMessage += chunk.content;
           } else if (chunk.type === "done") {
-            if (streamingEntry) {
-              setChatHistory((prev) =>
-                prev.map((entry) =>
-                  entry.isStreaming
-                    ? {
-                        ...entry,
-                        content: `Generated commit message: "${commitMessage.trim()}"`,
-                        isStreaming: false,
-                      }
-                    : entry
-                )
-              );
+            if (sessionId) {
+              const result = streamWriter.endAssistantStream();
+              commitMessage = result.finalText;
+              sessionId = null;
             }
             break;
           }
         }
+
+        // Update status entry with final result
+        setChatHistory((prev) =>
+          prev.map((entry) =>
+            entry.content === "Generating commit message..."
+              ? {
+                  ...entry,
+                  content: `Generated commit message: "${commitMessage.trim()}"`,
+                }
+              : entry
+          )
+        );
 
         // Execute the commit
         const cleanCommitMessage = commitMessage
@@ -618,51 +624,27 @@ Respond with ONLY the commit message, no additional text.`;
     setIsProcessing(true);
     clearInput();
 
-    let flushTimer: NodeJS.Timeout | null = null;
-
     try {
       setIsStreaming(true);
-      let streamingEntry: ChatEntry | null = null;
-      let streamBuffer = '';
-
-      const flushBuffer = () => {
-        if (streamBuffer && streamingEntry) {
-          setChatHistory((prev) =>
-            prev.map((entry, idx) =>
-              idx === prev.length - 1 && entry.isStreaming
-                ? { ...entry, content: entry.content + streamBuffer }
-                : entry
-            )
-          );
-          streamBuffer = '';
-        }
-        if (flushTimer) {
-          clearTimeout(flushTimer);
-          flushTimer = null;
-        }
-      };
+      
+      // Phase A: Stream live to terminal (no React updates)
+      let sessionId: string | null = null;
+      let finalText = '';
+      let toolCalls: any[] = [];
+      let hasToolCalls = false;
 
       for await (const chunk of agent.processUserMessageStream(userInput)) {
         switch (chunk.type) {
           case "content":
             if (chunk.content) {
-              if (!streamingEntry) {
-                const newStreamingEntry = {
-                  type: "assistant" as const,
-                  content: chunk.content,
-                  timestamp: new Date(),
-                  isStreaming: true,
-                };
-                setChatHistory((prev) => [...prev, newStreamingEntry]);
-                streamingEntry = newStreamingEntry;
-              } else {
-                // Buffer chunks and flush at intervals to prevent flicker
-                streamBuffer += chunk.content;
-
-                if (!flushTimer) {
-                  flushTimer = setTimeout(flushBuffer, 75); // 75ms flush cadence
-                }
+              if (!sessionId) {
+                // Start streaming session
+                sessionId = streamWriter.beginAssistantStream();
               }
+              // Write chunk directly to stdout
+              streamWriter.writeChunk(chunk.content);
+              // Build final text for commit
+              finalText += chunk.content;
             }
             break;
 
@@ -674,37 +656,17 @@ Respond with ONLY the commit message, no additional text.`;
 
           case "tool_calls":
             if (chunk.toolCalls) {
-              // Flush any buffered content before stopping streaming
-              if (flushTimer) {
-                clearTimeout(flushTimer);
-                flushTimer = null;
+              hasToolCalls = true;
+              toolCalls = chunk.toolCalls;
+              
+              // End current assistant stream
+              if (sessionId) {
+                const result = streamWriter.endAssistantStream();
+                finalText = result.finalText;
+                sessionId = null;
               }
-              if (streamBuffer && streamingEntry) {
-                setChatHistory((prev) =>
-                  prev.map((entry, idx) =>
-                    idx === prev.length - 1 && entry.isStreaming
-                      ? { ...entry, content: entry.content + streamBuffer, isStreaming: false, toolCalls: chunk.toolCalls }
-                      : entry
-                  )
-                );
-                streamBuffer = '';
-              } else {
-                // Stop streaming for the current assistant message
-                setChatHistory((prev) =>
-                  prev.map((entry) =>
-                    entry.isStreaming
-                      ? {
-                          ...entry,
-                          isStreaming: false,
-                          toolCalls: chunk.toolCalls,
-                        }
-                      : entry
-                  )
-                );
-              }
-              streamingEntry = null;
 
-              // Add individual tool call entries to show tools are being executed
+              // Add tool call entries to chat history (single commit)
               chunk.toolCalls.forEach((toolCall) => {
                 const toolCallEntry: ChatEntry = {
                   type: "tool_call",
@@ -719,11 +681,9 @@ Respond with ONLY the commit message, no additional text.`;
 
           case "tool_result":
             if (chunk.toolCall && chunk.toolResult) {
+              // Update the existing tool_call entry with the result
               setChatHistory((prev) =>
                 prev.map((entry) => {
-                  if (entry.isStreaming) {
-                    return { ...entry, isStreaming: false };
-                  }
                   // Update the existing tool_call entry with the result
                   if (
                     entry.type === "tool_call" &&
@@ -741,42 +701,44 @@ Respond with ONLY the commit message, no additional text.`;
                   return entry;
                 })
               );
-              streamingEntry = null;
+
+              // Resume streaming after tool result
+              if (hasToolCalls) {
+                sessionId = streamWriter.beginAssistantStream();
+                hasToolCalls = false;
+              }
             }
             break;
 
           case "done":
-            // Flush any remaining buffered content
-            if (flushTimer) {
-              clearTimeout(flushTimer);
-              flushTimer = null;
+            // End streaming and commit final message
+            if (sessionId) {
+              const result = streamWriter.endAssistantStream();
+              finalText = result.finalText;
+              sessionId = null;
             }
-            if (streamBuffer && streamingEntry) {
-              setChatHistory((prev) =>
-                prev.map((entry, idx) =>
-                  idx === prev.length - 1 && entry.isStreaming
-                    ? { ...entry, content: entry.content + streamBuffer, isStreaming: false }
-                    : entry
-                )
-              );
-              streamBuffer = '';
-            } else if (streamingEntry) {
-              setChatHistory((prev) =>
-                prev.map((entry) =>
-                  entry.isStreaming ? { ...entry, isStreaming: false } : entry
-                )
-              );
-            }
-            setIsStreaming(false);
             break;
         }
       }
-    } catch (error: any) {
-      // Clean up any pending buffer/timer on error
-      if (flushTimer) {
-        clearTimeout(flushTimer);
-        flushTimer = null;
+
+      // Phase B: commit once to React state (single commit pattern)
+      if (finalText) {
+        const assistantEntry: ChatEntry = {
+          type: "assistant",
+          content: finalText,
+          timestamp: new Date(),
+          ...(toolCalls.length > 0 && { toolCalls }),
+        };
+        setChatHistory((prev) => [...prev, assistantEntry]);
       }
+
+      setIsStreaming(false);
+    } catch (error: any) {
+      // Clean up stream on error
+      if (streamWriter.isStreaming()) {
+        streamWriter.abortStream();
+      }
+      
       const errorEntry: ChatEntry = {
         type: "assistant",
         content: `Error: ${error.message}`,

@@ -15,6 +15,7 @@ import {
   ConfirmationOptions,
 } from '../../utils/confirmation-service.js';
 import ApiKeyInput from './api-key-input.js';
+import { streamWriter } from '../stream-writer.js';
 import cfonts from 'cfonts';
 
 interface ChatInterfaceProps {
@@ -53,6 +54,7 @@ function ChatInterfaceWithAgent({
   const [processingTime, setProcessingTime] = useState(0);
   const [tokenCount, setTokenCount] = useState(0);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamFrozenHistory, setStreamFrozenHistory] = useState<ChatEntry[]>([]);
   const [confirmationOptions, setConfirmationOptions] =
     useState<ConfirmationOptions | null>(null);
   const scrollRef = useRef<any>();
@@ -142,27 +144,24 @@ function ChatInterfaceWithAgent({
         setIsStreaming(true);
 
         try {
-          let streamingEntry: ChatEntry | null = null;
+          // Use Hybrid Renderer for initial message
+          let sessionId: string | null = null;
+          let finalText = '';
+          let toolCalls: any[] = [];
+          let hasToolCalls = false;
+
           for await (const chunk of agent.processUserMessageStream(
             initialMessage
           )) {
             switch (chunk.type) {
               case 'content':
-                  if (chunk.content) {
-                    if (!streamingEntry) {
-                      const newStreamingEntry = {
-                        type: 'assistant' as const,
-                        content: chunk.content,
-                        timestamp: new Date(),
-                        isStreaming: true,
-                      };
-                      setChatHistory((prev) => [...prev, newStreamingEntry]);
-                      streamingEntry = newStreamingEntry;
-                    } else {
-                      // Buffer the content instead of immediate state update
-                      handleStreamingChunk(chunk.content);
-                    }
+                if (chunk.content) {
+                  if (!sessionId) {
+                    sessionId = streamWriter.beginAssistantStream();
                   }
+                  streamWriter.writeChunk(chunk.content);
+                  finalText += chunk.content;
+                }
                 break;
               case 'token_count':
                 if (chunk.tokenCount !== undefined) {
@@ -171,21 +170,17 @@ function ChatInterfaceWithAgent({
                 break;
               case 'tool_calls':
                 if (chunk.toolCalls) {
-                  // Stop streaming for the current assistant message
-                  setChatHistory((prev) =>
-                    prev.map((entry) =>
-                      entry.isStreaming
-                        ? {
-                            ...entry,
-                            isStreaming: false,
-                            toolCalls: chunk.toolCalls,
-                          }
-                        : entry
-                    )
-                  );
-                  streamingEntry = null;
+                  hasToolCalls = true;
+                  toolCalls = chunk.toolCalls;
+                  
+                  // End current assistant stream
+                  if (sessionId) {
+                    const result = streamWriter.endAssistantStream();
+                    finalText = result.finalText;
+                    sessionId = null;
+                  }
 
-                  // Add individual tool call entries to show tools are being executed
+                  // Add tool call entries to chat history
                   chunk.toolCalls.forEach((toolCall) => {
                     const toolCallEntry: ChatEntry = {
                       type: 'tool_call',
@@ -199,11 +194,9 @@ function ChatInterfaceWithAgent({
                 break;
               case 'tool_result':
                 if (chunk.toolCall && chunk.toolResult) {
+                  // Update the existing tool_call entry with the result
                   setChatHistory((prev) =>
                     prev.map((entry) => {
-                      if (entry.isStreaming) {
-                        return { ...entry, isStreaming: false };
-                      }
                       if (
                         entry.type === 'tool_call' &&
                         entry.toolCall?.id === chunk.toolCall?.id
@@ -220,24 +213,43 @@ function ChatInterfaceWithAgent({
                       return entry;
                     })
                   );
-                  streamingEntry = null;
+
+                  // Resume streaming after tool result
+                  if (hasToolCalls) {
+                    sessionId = streamWriter.beginAssistantStream();
+                    hasToolCalls = false;
+                  }
                 }
                 break;
               case 'done':
-                if (streamingEntry) {
-                  setChatHistory((prev) =>
-                    prev.map((entry) =>
-                      entry.isStreaming
-                        ? { ...entry, isStreaming: false }
-                        : entry
-                    )
-                  );
+                // End streaming and commit final message
+                if (sessionId) {
+                  const result = streamWriter.endAssistantStream();
+                  finalText = result.finalText;
+                  sessionId = null;
                 }
+                
+                // Commit final assistant message to React state
+                if (finalText) {
+                  const assistantEntry: ChatEntry = {
+                    type: 'assistant',
+                    content: finalText,
+                    timestamp: new Date(),
+                    ...(toolCalls.length > 0 && { toolCalls }),
+                  };
+                  setChatHistory((prev) => [...prev, assistantEntry]);
+                }
+                
                 setIsStreaming(false);
                 break;
             }
           }
         } catch (error: any) {
+          // Clean up stream on error
+          if (streamWriter.isStreaming()) {
+            streamWriter.abortStream();
+          }
+          
           const errorEntry: ChatEntry = {
             type: 'assistant',
             content: `Error: ${error.message}`,
@@ -273,11 +285,18 @@ function ChatInterfaceWithAgent({
   useEffect(() => {
     if (!isProcessing && !isStreaming) {
       setProcessingTime(0);
+      // Unfreeze history when streaming ends
+      setStreamFrozenHistory([]);
       return;
     }
 
     if (processingStartTime.current === 0) {
       processingStartTime.current = Date.now();
+    }
+
+    // Freeze history when streaming starts to prevent repaints
+    if (isStreaming && streamFrozenHistory.length === 0) {
+      setStreamFrozenHistory([...chatHistory]);
     }
 
     const interval = setInterval(() => {
@@ -287,7 +306,7 @@ function ChatInterfaceWithAgent({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isProcessing, isStreaming]);
+  }, [isProcessing, isStreaming, chatHistory.length]);
 
   const handleConfirmation = (dontAskAgain?: boolean) => {
     confirmationService.confirmOperation(true, dontAskAgain);
@@ -339,8 +358,9 @@ function ChatInterfaceWithAgent({
 
       <Box flexDirection="column" ref={scrollRef}>
         <ChatHistory
-          entries={chatHistory}
+          entries={isStreaming ? streamFrozenHistory : chatHistory}
           isConfirmationActive={!!confirmationOptions}
+          isStreaming={isStreaming}
         />
       </Box>
 
@@ -359,7 +379,7 @@ function ChatInterfaceWithAgent({
       {!confirmationOptions && (
         <>
           <LoadingSpinner
-            isActive={isProcessing || isStreaming}
+            isActive={isProcessing && !isStreaming}
             processingTime={processingTime}
             tokenCount={tokenCount}
           />
