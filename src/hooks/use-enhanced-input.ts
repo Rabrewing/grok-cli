@@ -198,11 +198,12 @@ export function useEnhancedInput({
     // Handle deletion - check multiple ways backspace might be detected
     // Backspace can be detected in different ways depending on terminal
     // In some terminals, backspace shows up as delete:true with empty inputChar
-    const isBackspace = key.backspace || 
-                       key.name === 'backspace' || 
-                       inputChar === '\b' || 
+    const isBackspace = key.backspace ||
+                       key.name === 'backspace' ||
+                       inputChar === '\b' ||
                        inputChar === '\x7f' ||
-                       (key.delete && inputChar === '' && !key.shift);
+                       inputChar === '\x08' || // Additional backspace code
+                       (key.delete && inputChar === '' && !key.shift && !key.ctrl && !key.meta);
                        
     if (isBackspace) {
       if (key.ctrl || key.meta) {

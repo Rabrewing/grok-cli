@@ -7,10 +7,12 @@ import { MarkdownRenderer } from "../utils/markdown-renderer.js";
 interface ChatHistoryProps {
   entries: ChatEntry[];
   isConfirmationActive?: boolean;
+  isStreaming?: boolean;
 }
 
 // Render window cap to prevent excessive re-renders
 const MAX_ENTRIES_RENDERED = 25;
+const MAX_ENTRIES_DURING_STREAMING = 10; // Reduce during streaming for better performance
 
 // Memoized ChatEntry component to prevent unnecessary re-renders
 const MemoizedChatEntry = React.memo(
@@ -213,6 +215,7 @@ MemoizedChatEntry.displayName = "MemoizedChatEntry";
 export function ChatHistory({
   entries,
   isConfirmationActive = false,
+  isStreaming = false,
 }: ChatHistoryProps) {
   // Filter out tool_call entries with "Executing..." when confirmation is active
   const filteredEntries = isConfirmationActive
@@ -221,9 +224,10 @@ export function ChatHistory({
           !(entry.type === "tool_call" && entry.content === "Executing...")
       )
     : entries;
-  
-  // Apply render windowing - only show last MAX_ENTRIES_RENDERED entries
-  const visibleEntries = filteredEntries.slice(-MAX_ENTRIES_RENDERED);
+
+  // Apply render windowing - use reduced limit during streaming for better performance
+  const maxEntries = isStreaming ? MAX_ENTRIES_DURING_STREAMING : MAX_ENTRIES_RENDERED;
+  const visibleEntries = filteredEntries.slice(-maxEntries);
 
   return (
     <Box flexDirection="column">
@@ -231,7 +235,7 @@ export function ChatHistory({
         <MemoizedChatEntry
           key={`${entry.timestamp.getTime()}-${index}`}
           entry={entry}
-          index={filteredEntries.length - MAX_ENTRIES_RENDERED + index}
+          index={filteredEntries.length - maxEntries + index}
         />
       ))}
     </Box>
