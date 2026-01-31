@@ -49,8 +49,8 @@ export class RulesResolver {
       '~/brewdocs/GROK_GLOBAL_RULES.md',
     ];
     for (const ruleFile of userRules) {
-      const expandedPath = ruleFile.replace(/^~\//, process.env.HOME + '/');
-      if (await fs.pathExists(expandedPath)) {
+      const expandedPath = ruleFile.replace(/^~\//, (process.env.HOME || '') + '/');
+      if (process.env.HOME && await fs.pathExists(expandedPath)) {
         try {
           const content = await fs.readFile(expandedPath, 'utf-8');
           rules.push({ content, source: `user/${ruleFile}`, priority: 3 });
@@ -59,6 +59,13 @@ export class RulesResolver {
           // Skip if can't read
         }
       }
+    }
+
+    // Fallback: bundled rules if no other rules found
+    if (rules.length === 0) {
+      const defaultRules = await this.loadDefaultRules();
+      rules.push(defaultRules);
+      sources.push('Built-in Fallback');
     }
 
     return rules;

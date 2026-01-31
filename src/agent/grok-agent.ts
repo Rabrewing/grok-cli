@@ -20,6 +20,7 @@ import { EventEmitter } from "events";
 import { createTokenCounter, TokenCounter } from "../utils/token-counter.js";
 import { loadCustomInstructions } from "../utils/custom-instructions.js";
 import { getSettingsManager } from "../utils/settings-manager.js";
+import { UIAdapter } from "../ui/adapter.js";
 
 export interface ChatEntry {
   type: "user" | "assistant" | "tool_result" | "tool_call";
@@ -54,14 +55,21 @@ export class GrokAgent extends EventEmitter {
   private abortController: AbortController | null = null;
   private mcpInitialized: boolean = false;
   private maxToolRounds: number;
+  private uiAdapter: UIAdapter | null = null;
+
+  setUIAdapter(adapter: UIAdapter) {
+    this.uiAdapter = adapter;
+  }
 
   constructor(
     apiKey: string,
     baseURL?: string,
     model?: string,
-    maxToolRounds?: number
+    maxToolRounds?: number,
+    uiAdapter?: UIAdapter
   ) {
     super();
+    this.uiAdapter = uiAdapter;
     const manager = getSettingsManager();
     const savedModel = manager.getCurrentModel();
     const modelToUse = model || savedModel || "grok-code-fast-1";
@@ -407,6 +415,11 @@ Current working directory: ${process.cwd()}`,
     this.chatHistory.push(userEntry);
     this.messages.push({ role: "user", content: message });
 
+    // UI Adapter calls
+    if (this.uiAdapter) {
+      this.uiAdapter.appendUserMessage(message);
+    }
+
     // Calculate input tokens
     let inputTokens = this.tokenCounter.countMessageTokens(
       this.messages as any
@@ -420,6 +433,7 @@ Current working directory: ${process.cwd()}`,
     let toolRounds = 0;
     let totalOutputTokens = 0;
     let lastTokenUpdate = 0;
+    const messageId = `msg_${Date.now()}`;
 
     try {
       // Agent loop - continue until no more tool calls or max rounds reached
@@ -432,6 +446,11 @@ Current working directory: ${process.cwd()}`,
           };
           yield { type: "done" };
           return;
+        }
+
+        // UI Adapter: start assistant message
+        if (this.uiAdapter) {
+          this.uiAdapter.startAssistantMessage(messageId);
         }
 
         // Stream response and accumulate
@@ -498,6 +517,11 @@ Current working directory: ${process.cwd()}`,
               content: chunk.choices[0].delta.content,
             };
 
+            // UI Adapter: append chunk
+            if (this.uiAdapter) {
+              this.uiAdapter.appendAssistantChunk(messageId, chunk.choices[0].delta.content);
+            }
+
             // Emit token count update
             const now = Date.now();
             if (now - lastTokenUpdate > 250) {
@@ -550,6 +574,11 @@ Current working directory: ${process.cwd()}`,
               return;
             }
 
+            // UI Adapter: append work event
+            if (this.uiAdapter) {
+              this.uiAdapter.appendWork(`Executing ${toolCall.function.name}...`);
+            }
+
             const result = await this.executeTool(toolCall);
 
             const toolResultEntry: ChatEntry = {
@@ -568,6 +597,12 @@ Current working directory: ${process.cwd()}`,
               toolCall,
               toolResult: result,
             };
+
+            // UI Adapter: append work log
+            if (this.uiAdapter) {
+              const args = JSON.parse(toolCall.function.arguments);
+              this.uiAdapter.appendWork(this.getWorkLogMessage(toolCall.function.name, args, result));
+            }
 
             // Add tool result with proper format (needed for AI context)
             this.messages.push({
@@ -592,6 +627,10 @@ Current working directory: ${process.cwd()}`,
           // Continue the loop to get the next response (which might have more tool calls)
         } else {
           // No tool calls, we're done
+          // UI Adapter: end assistant message
+          if (this.uiAdapter) {
+            this.uiAdapter.endAssistantMessage(messageId);
+          }
           break;
         }
       }
@@ -775,6 +814,32 @@ Current working directory: ${process.cwd()}`,
   abortCurrentOperation(): void {
     if (this.abortController) {
       this.abortController.abort();
+    }
+  }
+
+  private getWorkLogMessage(name: string, args: any, result: ToolResult): string {
+    switch (name) {
+      case "view_file":
+        return `ReadFile: ${args.path}`;
+      case "create_file":
+        return `CreateFile: ${args.path}`;
+      case "str_replace_editor":
+        return `Edit: ${args.path}`;
+      case "edit_file":
+        return `Edit (Morph): ${args.target_file}`;
+      case "bash":
+        return `Bash: ${args.command} -> ${result.success ? 'OK' : 'Failed'}`;
+      case "search":
+        return `Search: "${args.query}" -> ${result.success ? 'Found matches' : 'Failed'}`;
+      case "create_todo_list":
+        return `CreateTodoList: ${args.todos?.length || 0} items`;
+      case "update_todo_list":
+        return `UpdateTodoList: ${args.updates?.length || 0} updates`;
+      default:
+        if (name.startsWith("mcp__")) {
+          return `MCP: ${name.substring(5)}`;
+        }
+        return `Tool: ${name}`;
     }
   }
 }

@@ -12,6 +12,8 @@ import { CommandProcessor } from './commands/index.js';
 import { RepoDetector } from './utils/repo.js';
 import { RulesResolver } from './utils/rules.js';
 import { SnapshotGenerator } from './utils/snapshot.js';
+import { BlessedUI } from './ui-blessed/index.js';
+import { BlessedAdapter } from './ui-blessed/adapter-blessed.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 // Load environment variables
@@ -333,6 +335,7 @@ program
     '--dry-run',
     'ensures no file writes unless --apply or explicit interactive accept'
   )
+  .option('--ui <type>', 'UI type: blessed or ink (default: blessed)', 'blessed')
   .option(
     '--max-tool-rounds <rounds>',
     'maximum number of tool execution rounds (default: 400)',
@@ -409,15 +412,20 @@ program
         }
 
         // Load rules and snapshot for repo mode
-        const repoRoot = (await RepoDetector.detectRepoRoot()) || process.cwd();
-        const rules = await RulesResolver.resolveRules(options?.rules, repoRoot);
+        const detectedRepoRoot = await RepoDetector.detectRepoRoot();
+        const repoRoot = detectedRepoRoot || process.cwd();
+        const rules = await RulesResolver.resolveRules(options?.rules, detectedRepoRoot || undefined);
         const sources = rules.map((rule) => rule.source);
+        console.log(`Rules loaded from: ${sources.join(', ')}`);
         const rulesPrompt = RulesResolver.formatRulesForPrompt(rules, sources);
-        const snapshot = await SnapshotGenerator.generateSnapshot(
-          repoRoot,
-          rulesPrompt
-        );
-        repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot) || '';
+        let repoSnapshot = '';
+        if (detectedRepoRoot) {
+          const snapshot = await SnapshotGenerator.generateSnapshot(
+            detectedRepoRoot,
+            rulesPrompt
+          );
+          repoSnapshot = SnapshotGenerator.formatSnapshot(snapshot) || '';
+        }
 
         console.log(repoSnapshot);
 
@@ -434,17 +442,31 @@ program
         ? message.join(' ')
         : message;
 
-      render(
-        React.createElement(ChatInterface, {
-          agent,
-          initialMessage,
-          applyMode: options.apply || false,
-          diffMode: options.diff !== false,
-          fullFileMode: options.fullFiles || false,
-          repoMode: isRepoMode,
-          repoSnapshot: repoSnapshot || '',
-        })
-      );
+      if (options.ui === 'ink') {
+        render(
+          React.createElement(ChatInterface, {
+            agent,
+            initialMessage,
+            applyMode: options.apply || false,
+            diffMode: options.diff !== false,
+            fullFileMode: options.fullFiles || false,
+            repoMode: isRepoMode,
+            repoSnapshot: repoSnapshot || '',
+          })
+        );
+      } else if (options.ui === 'blessed') {
+        // Create Blessed UI
+        const agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
+        const ui = new BlessedUI({});
+        const adapter = new BlessedAdapter(ui, agent);
+        agent.setUIAdapter(adapter);
+        ui.setAdapter(adapter);
+        // Start UI
+        // The UI is already started in constructor
+      } else {
+        console.error('❌ Invalid UI type. Use blessed or ink.');
+        process.exit(1);
+      }
     } catch (error: any) {
       console.error('❌ Error initializing Grok CLI:', error.message);
       process.exit(1);
