@@ -21,24 +21,33 @@ export class EnhancedRenderManager {
   }
 
   private setupAutoScrollBehavior(): void {
-    // Monitor user scroll to control auto-scroll
-    this.layout.transcript.on('scroll', () => {
-      const scrollPercentage = this.layout.transcript.getScrollPerc();
-      this.userScrolledUp = scrollPercentage < 95;
-      
-      if (this.userScrolledUp) {
-        this.showPendingIndicator();
-      } else {
-        this.hidePendingIndicator();
-      }
-    });
+    // Monitor user scroll to control auto-scroll (with error handling)
+    try {
+      this.layout.transcript.on('scroll', () => {
+        try {
+          const scrollPercentage = this.layout.transcript.getScrollPerc();
+          this.userScrolledUp = scrollPercentage < 95;
+          
+          if (this.userScrolledUp) {
+            this.showPendingIndicator();
+          } else {
+            this.hidePendingIndicator();
+          }
+        } catch (e) {
+          // Graceful handling of scroll percentage errors
+        }
+      });
 
-    // Mouse wheel support for better control
-    this.layout.transcript.key(['wheelup', 'wheeldown'], (ch, key) => {
-      if (key.full === 'wheelup' || key.full === 'wheeldown') {
-        this.userScrolledUp = true;
-      }
-    });
+      // Mouse wheel support for better control
+      this.layout.transcript.key(['wheelup', 'wheeldown'], (ch, key) => {
+        if (key.full === 'wheelup' || key.full === 'wheeldown') {
+          this.userScrolledUp = true;
+        }
+      });
+    } catch (e) {
+      // If scroll monitoring fails, disable this feature gracefully
+      console.warn('Scroll monitoring not available in this terminal');
+    }
   }
 
   private startRenderLoop(): void {

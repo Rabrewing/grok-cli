@@ -36,17 +36,11 @@ export function createEnhancedLayout(): LayoutElements {
   const screen = blessed.screen({
     smartCSR: true,
     fullUnicode: true,
-    dockBorders: true,
+    autoPadding: true,
     title: 'BrewVerse Terminal - Grok CLI',
-    cursor: {
-      artificial: true,
-      shape: 'line',
-      blink: true,
-      color: BREWVERSE_THEME.colors.teal,
-    },
   });
 
-  // Header with BrewVerse branding
+  // Header with BrewVerse branding (simplified for compatibility)
   const header = blessed.box({
     parent: screen,
     top: 0,
@@ -54,13 +48,10 @@ export function createEnhancedLayout(): LayoutElements {
     width: '100%',
     height: 2,
     content: '🚀 BrewVerse Terminal • Grok CLI v1.0',
-    tags: false,
     style: {
-      fg: BREWVERSE_THEME.colors.gold,
-      bg: BREWVERSE_THEME.colors.surface,
-      border: {
-        fg: BREWVERSE_THEME.colors.border,
-      },
+      fg: 'yellow',
+      bg: 'blue',
+      bold: true,
     },
     border: {
       type: 'line',
@@ -75,9 +66,8 @@ export function createEnhancedLayout(): LayoutElements {
     width: 30,
     height: 1,
     content: 'Model: grok-4-latest',
-    tags: false,
     style: {
-      fg: BREWVERSE_THEME.colors.textMuted,
+      fg: 'gray',
     },
   });
 
@@ -88,9 +78,9 @@ export function createEnhancedLayout(): LayoutElements {
     width: 20,
     height: 1,
     content: '● Ready',
-    tags: false,
     style: {
-      fg: BREWVERSE_THEME.colors.teal,
+      fg: 'cyan',
+      bold: true,
     },
   });
 
@@ -106,25 +96,17 @@ export function createEnhancedLayout(): LayoutElements {
     alwaysScroll: true,
     keys: true,
     mouse: true,
-    scrollbar: {
-      ch: ' ',
-      style: {
-        bg: BREWVERSE_THEME.colors.border,
-        fg: BREWVERSE_THEME.colors.textMuted,
-      },
-    },
     style: {
-      fg: BREWVERSE_THEME.colors.textPrimary,
-      bg: BREWVERSE_THEME.colors.background,
+      fg: 'white',
+      bg: 'black',
       border: {
-        fg: BREWVERSE_THEME.colors.border,
+        fg: 'gray',
       },
     },
     border: {
       type: 'line',
     },
     label: ' Chat ',
-    tags: false,
   });
 
   // Work log pane (30% width, toggleable)
@@ -138,25 +120,17 @@ export function createEnhancedLayout(): LayoutElements {
     scrollable: true,
     keys: true,
     mouse: true,
-    scrollbar: {
-      ch: ' ',
-      style: {
-        bg: BREWVERSE_THEME.colors.border,
-        fg: BREWVERSE_THEME.colors.textMuted,
-      },
-    },
     style: {
-      fg: BREWVERSE_THEME.colors.textMuted,
-      bg: BREWVERSE_THEME.colors.background,
+      fg: 'gray',
+      bg: 'black',
       border: {
-        fg: BREWVERSE_THEME.colors.purple,
+        fg: 'magenta',
       },
     },
     border: {
       type: 'line',
     },
     label: ' Work Log ',
-    tags: false,
   });
 
   // Input area (fixed at bottom)
@@ -168,10 +142,10 @@ export function createEnhancedLayout(): LayoutElements {
     height: 5,
     content: '',
     style: {
-      fg: BREWVERSE_THEME.colors.textPrimary,
-      bg: BREWVERSE_THEME.colors.surface,
+      fg: 'white',
+      bg: 'blue',
       border: {
-        fg: BREWVERSE_THEME.colors.teal,
+        fg: 'cyan',
       },
     },
     border: {
@@ -189,17 +163,16 @@ export function createEnhancedLayout(): LayoutElements {
     mouse: true,
     keys: true,
     style: {
-      fg: BREWVERSE_THEME.colors.textPrimary,
-      bg: BREWVERSE_THEME.colors.background,
+      fg: 'white',
+      bg: 'black',
       focus: {
-        fg: BREWVERSE_THEME.colors.textPrimary,
-        bg: BREWVERSE_THEME.colors.background,
+        fg: 'white',
+        bg: 'black',
         border: {
-          fg: BREWVERSE_THEME.colors.teal,
+          fg: 'cyan',
         },
       },
     },
-    tags: true,
   });
 
   // Transcript area inside chat pane
@@ -215,10 +188,9 @@ export function createEnhancedLayout(): LayoutElements {
     keys: true,
     mouse: true,
     style: {
-      fg: BREWVERSE_THEME.colors.textPrimary,
-      bg: 'transparent',
+      fg: 'white',
+      bg: 'black',
     },
-    tags: true,
   });
 
   return {
