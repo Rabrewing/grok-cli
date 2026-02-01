@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import React from 'react';
 import { render } from 'ink';
-import { program } from 'commander';
+import { program, Command } from 'commander';
 import * as dotenv from 'dotenv';
 import { GrokAgent } from './agent/grok-agent.js';
 import ChatInterface from './ui/components/chat-interface.js';
@@ -14,6 +14,7 @@ import { RulesResolver } from './utils/rules.js';
 import { SnapshotGenerator } from './utils/snapshot.js';
 import { BlessedUI } from './ui-blessed/index.js';
 import { BlessedAdapter } from './ui-blessed/adapter-blessed.js';
+import { EnhancedBlessedAdapter } from './ui-blessed/enhanced-adapter.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 // Load environment variables
@@ -239,14 +240,19 @@ async function processPromptHeadless(
   apiKey: string,
   baseURL?: string,
   model?: string,
-  maxToolRounds?: number
+  maxToolRounds?: number,
+  options?: any
 ): Promise<void> {
   try {
     const agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
 
-    // Configure confirmation service for headless mode (auto-approve all operations)
+    // Configure confirmation service for headless mode
     const confirmationService = ConfirmationService.getInstance();
-    confirmationService.setSessionFlag('allOperations', true);
+    
+    // Respect dry-run flag - don't auto-approve if dry-run is set
+    if (!options?.dryRun) {
+      confirmationService.setSessionFlag('allOperations', true);
+    }
 
     // Process the user message
     const chatEntries = await agent.processUserMessage(prompt);
@@ -380,7 +386,8 @@ program
           apiKey,
           baseURL,
           model,
-          maxToolRounds
+          maxToolRounds,
+          options
         );
         return;
       }
@@ -401,10 +408,6 @@ program
         console.log(
           '📁 Repo mode enabled - loading rules and generating snapshot...'
         );
-
-        // Load rules and snapshot for repo mode
-        const detectedRepoRoot = await RepoDetector.detectRepoRoot();
-        const isRepoMode = options.repo || detectedRepoRoot !== null;
         
         if (!detectedRepoRoot) {
           console.error('❌ Error: Repo mode enabled but no git repository found');
@@ -412,7 +415,6 @@ program
         }
 
         // Load rules and snapshot for repo mode
-        const detectedRepoRoot = await RepoDetector.detectRepoRoot();
         const repoRoot = detectedRepoRoot || process.cwd();
         const rules = await RulesResolver.resolveRules(options?.rules, detectedRepoRoot || undefined);
         const sources = rules.map((rule) => rule.source);
@@ -455,14 +457,17 @@ program
           })
         );
       } else if (options.ui === 'blessed') {
-        // Create Blessed UI
+        // Create Enhanced Blessed UI
         const agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
         const ui = new BlessedUI({});
-        const adapter = new BlessedAdapter(ui, agent);
+        const adapter = new EnhancedBlessedAdapter(ui, agent);
         agent.setUIAdapter(adapter);
         ui.setAdapter(adapter);
-        // Start UI
-        // The UI is already started in constructor
+        
+        // Show BrewVerse splash
+        setTimeout(() => {
+          adapter.showWelcome(model);
+        }, 200);
       } else {
         console.error('❌ Invalid UI type. Use blessed or ink.');
         process.exit(1);
@@ -536,8 +541,7 @@ gitCommand
   });
 
 // Create repo mode commands
-const snapCommand = program
-  .command('snap')
+const snapCommand = new Command('snap')
   .description('Generate a repository snapshot')
   .option('--rules <path>', 'use specific rules file path')
   .action(async (options) => {
@@ -558,8 +562,7 @@ const snapCommand = program
     }
   });
 
-const ticketCommand = program
-  .command('ticket <task>')
+const ticketCommand = new Command('ticket <task>')
   .description('Generate a structured ticket for a given task')
   .option('--rules <path>', 'use specific rules file path')
   .action(async (task, options) => {
@@ -575,8 +578,7 @@ const ticketCommand = program
     }
   });
 
-const patchCommand = program
-  .command('patch')
+const patchCommand = new Command('patch')
   .description('Apply suggested changes from the last ticket')
   .action(async () => {
     try {

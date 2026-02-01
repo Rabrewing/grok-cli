@@ -74,11 +74,12 @@ export class SettingsManager {
 
   private constructor() {
     // User settings path: ~/.grok/user-settings.json
-    this.userSettingsPath = path.join(
-      os.homedir(),
+    const homeDir = os.homedir();
+    this.userSettingsPath = homeDir ? path.join(
+      homeDir,
       ".grok",
       "user-settings.json"
-    );
+    ) : path.join(process.cwd(), ".grok", "user-settings.json");
 
     // Project settings path: .grok/settings.json (in current working directory)
     this.projectSettingsPath = path.join(

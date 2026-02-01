@@ -13,6 +13,13 @@ export class TextEditorTool {
     viewRange?: [number, number]
   ): Promise<ToolResult> {
     try {
+      if (!filePath) {
+        return {
+          success: false,
+          error: 'File path is required for view operation',
+        };
+      }
+      
       const resolvedPath = path.resolve(filePath);
 
       if (await fs.pathExists(resolvedPath)) {
@@ -75,6 +82,13 @@ export class TextEditorTool {
     replaceAll: boolean = false
   ): Promise<ToolResult> {
     try {
+      if (!filePath) {
+        return {
+          success: false,
+          error: 'File path is required for str_replace operation',
+        };
+      }
+      
       const resolvedPath = path.resolve(filePath);
 
       if (!(await fs.pathExists(resolvedPath))) {
@@ -165,6 +179,13 @@ export class TextEditorTool {
 
   async create(filePath: string, content: string): Promise<ToolResult> {
     try {
+      if (!filePath) {
+        return {
+          success: false,
+          error: 'File path is required for create operation',
+        };
+      }
+      
       const resolvedPath = path.resolve(filePath);
 
       // Check if user has already accepted file operations for this session
@@ -234,6 +255,13 @@ export class TextEditorTool {
     newContent: string
   ): Promise<ToolResult> {
     try {
+      if (!filePath) {
+        return {
+          success: false,
+          error: 'File path is required for replace_lines operation',
+        };
+      }
+      
       const resolvedPath = path.resolve(filePath);
 
       if (!(await fs.pathExists(resolvedPath))) {
@@ -321,6 +349,13 @@ export class TextEditorTool {
     content: string
   ): Promise<ToolResult> {
     try {
+      if (!filePath) {
+        return {
+          success: false,
+          error: 'File path is required for insert operation',
+        };
+      }
+      
       const resolvedPath = path.resolve(filePath);
 
       if (!(await fs.pathExists(resolvedPath))) {

@@ -598,10 +598,17 @@ Current working directory: ${process.cwd()}`,
               toolResult: result,
             };
 
-            // UI Adapter: append work log
+            // UI Adapter: append work log with enhanced details
             if (this.uiAdapter) {
               const args = JSON.parse(toolCall.function.arguments);
-              this.uiAdapter.appendWork(this.getWorkLogMessage(toolCall.function.name, args, result));
+              const basicMessage = this.getWorkLogMessage(toolCall.function.name, args, result);
+              
+              // Try enhanced adapter first, fall back to basic
+              if (typeof (this.uiAdapter as any).appendWorkEnhanced === 'function') {
+                (this.uiAdapter as any).appendWorkEnhanced(toolCall.function.name, args, result);
+              } else {
+                this.uiAdapter.appendWork(basicMessage);
+              }
             }
 
             // Add tool result with proper format (needed for AI context)

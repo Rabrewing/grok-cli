@@ -1,6 +1,6 @@
-import { UIAdapter } from '../adapter.js';
+import type { UIAdapter } from '../ui/adapter.js';
 import { BlessedUI } from './index.js';
-import { GrokAgent } from '../../agent/grok-agent.js';
+import { GrokAgent } from '../agent/grok-agent.js';
 
 export class BlessedAdapter implements UIAdapter {
   private ui: BlessedUI;
