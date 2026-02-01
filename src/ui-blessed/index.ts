@@ -1,7 +1,7 @@
 import { UIAdapter } from '../ui/adapter.js';
-import { createEnhancedLayout, LayoutElements, WorkLogEntry } from './enhanced-layout.js';
-import { EnhancedRenderManager } from './enhanced-render.js';
-import { EnhancedKeymapManager } from './enhanced-keymap.js';
+import { createLayout, LayoutElements } from './layout.js';
+import { setupKeybindings } from './keymap.js';
+import { RenderManager } from './render.js';
 
 export interface BlessedUIOptions {
   adapter?: UIAdapter;
@@ -10,9 +10,12 @@ export interface BlessedUIOptions {
 
 export class BlessedUI {
   private layout: LayoutElements;
-  private renderManager: EnhancedRenderManager;
-  private keymapManager: EnhancedKeymapManager;
+  private renderManager: RenderManager;
   private adapter!: UIAdapter;
+
+  getLayout(): LayoutElements {
+    return this.layout;
+  }
 
   setAdapter(adapter: UIAdapter) {
     this.adapter = adapter;
@@ -23,40 +26,27 @@ export class BlessedUI {
       this.adapter = options.adapter;
     }
 
-    this.layout = createEnhancedLayout();
-    this.renderManager = new EnhancedRenderManager(this.layout);
-    this.keymapManager = new EnhancedKeymapManager(this.layout, this.renderManager);
+    this.layout = createLayout();
+    this.renderManager = new RenderManager(this.layout);
 
+    this.setupKeybindings();
     this.setupInput();
 
-    // Focus input and show welcome
+    // Focus input and start
     this.renderManager.focusInput();
     this.renderManager.render();
-    
-    // Show splash screen after brief delay
-    setTimeout(() => {
-      this.showSplashScreen();
-    }, 100);
   }
 
-  private showSplashScreen(): void {
-    const splashText = `
-╔═════════════════════════════════════════════════════════════╗
-║                                                              ║
-║  🚀 BREWVERSE TERMINAL - GROK CLI v1.0                         ║
-║                                                              ║
-║  Advanced AI-powered development environment                ║
-║  Flicker-free • Feature-rich • Terminal-native           ║
-║                                                              ║
-║  Ready for your next command...                          ║
-║                                                              ║
-╚═════════════════════════════════════════════════════════════╝
-    `.trim();
-
-    this.renderManager.appendToTranscript('assistant', splashText);
+  private setupKeybindings(): void {
+    setupKeybindings(
+      this.layout,
+      () => this.adapter.clearAll(),
+      () => this.adapter.shutdown(),
+      () => this.renderManager.toggleWorkLog()
+    );
   }
 
-  private setupInput() {
+  private setupInput(): void {
     this.layout.input.on('submit', async (text: string) => {
       if (text.trim() === '/clear') {
         this.adapter.clearAll();
@@ -71,40 +61,26 @@ export class BlessedUI {
 
   // Methods called by adapter
   appendToTranscript(text: string) {
-    this.renderManager.appendToTranscript('assistant', text);
+    this.renderManager.appendToTranscript(text);
   }
 
   appendToWorkLog(text: string) {
-    // Convert string to WorkLogEntry for enhanced render manager
-    const workEntry: WorkLogEntry = {
-      id: `legacy_${Date.now()}`,
-      type: 'legacy',
-      label: text,
-      detail: text,
-      timestamp: new Date(),
-      status: 'success',
-    };
-    this.renderManager.appendToWorkLog(workEntry);
+    this.renderManager.appendToWorkLog(text);
   }
 
-  clearTranscript() {
+  clearTranscript(): void {
     this.renderManager.clearTranscript();
   }
 
-  clearWorkLog() {
+  clearWorkLog(): void {
     this.renderManager.clearWorkLog();
   }
 
-  setStatus(text: string) {
-    this.renderManager.updateStatus(text);
+  setStatus(text: string): void {
+    this.renderManager.setStatus(text);
   }
 
-  // New methods for enhanced features
-  getLayout(): LayoutElements {
-    return this.layout;
-  }
-
-  shutdown() {
+  shutdown(): void {
     this.layout.screen.destroy();
   }
 }
