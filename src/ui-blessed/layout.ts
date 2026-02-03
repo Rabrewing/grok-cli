@@ -2,15 +2,21 @@ import blessed from 'neo-blessed';
 
 export interface LayoutElements {
   screen: blessed.Widgets.Screen;
-  transcript: blessed.Widgets.BoxElement;
-  worklog: blessed.Widgets.BoxElement;
+  stream: blessed.Widgets.BoxElement;
   input: blessed.Widgets.TextboxElement;
+  // Compatibility dummies
+  header?: blessed.Widgets.BoxElement;
+  chat?: blessed.Widgets.BoxElement;
+  worklog?: blessed.Widgets.BoxElement;
+  status?: blessed.Widgets.BoxElement;
+  transcript?: blessed.Widgets.BoxElement;
+  modelInfo?: blessed.Widgets.BoxElement;
 }
 
 export function createLayout(): LayoutElements {
   const screen = blessed.screen({
     smartCSR: true,
-    title: 'Grok CLI',
+    title: 'BrewGrok CLI - Unified Stream',
     cursor: {
       artificial: true,
       shape: 'line',
@@ -18,7 +24,7 @@ export function createLayout(): LayoutElements {
     },
   });
 
-  const transcript = blessed.box({
+  const stream = blessed.box({
     top: 0,
     left: 0,
     width: '100%',
@@ -37,20 +43,6 @@ export function createLayout(): LayoutElements {
     },
   });
 
-  const worklog = blessed.box({
-    top: '100%-6',
-    left: 0,
-    width: '100%',
-    height: 3,
-    hidden: true,
-    scrollable: true,
-    alwaysScroll: true,
-    style: {
-      fg: 'yellow',
-      bg: 'black',
-    },
-  });
-
   const input = blessed.textbox({
     bottom: 0,
     left: 0,
@@ -63,9 +55,14 @@ export function createLayout(): LayoutElements {
     },
   });
 
-  screen.append(transcript);
-  screen.append(worklog);
+  // Dummy boxes for compatibility with enhanced adapter
+  const header = blessed.box({ hidden: true });
+  const worklog = blessed.box({ hidden: true });
+  const status = blessed.box({ hidden: true });
+  const modelInfo = blessed.box({ hidden: true });
+
+  screen.append(stream);
   screen.append(input);
 
-  return { screen, transcript, worklog, input };
+  return { screen, stream, input, header, chat: stream, worklog, status, transcript: stream, modelInfo };
 }

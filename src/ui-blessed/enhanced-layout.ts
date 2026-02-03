@@ -23,13 +23,14 @@ export interface WorkLogEntry {
 
 export interface LayoutElements {
   screen: Widgets.Screen;
-  header: Widgets.BoxElement;
-  chat: Widgets.BoxElement;
-  worklog: Widgets.BoxElement;
+  header?: Widgets.BoxElement;
+  chat?: Widgets.BoxElement;
+  worklog?: Widgets.BoxElement;
   input: Widgets.TextboxElement;
-  status: Widgets.BoxElement;
-  transcript: Widgets.BoxElement;
-  modelInfo: Widgets.BoxElement;
+  status?: Widgets.BoxElement;
+  transcript?: Widgets.BoxElement;
+  modelInfo?: Widgets.BoxElement;
+  stream: Widgets.BoxElement;
 }
 
 export function createEnhancedLayout(): LayoutElements {
@@ -202,5 +203,6 @@ export function createEnhancedLayout(): LayoutElements {
     status,
     transcript,
     modelInfo,
+    stream: transcript,
   };
 }

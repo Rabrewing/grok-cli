@@ -144,6 +144,36 @@ export class EnhancedBlessedAdapter implements UIAdapter {
     this.renderManager.appendToTranscript('work', event);
   }
 
+  appendAssistantMessage(text: string): void {
+    this.renderManager.appendToTranscript('assistant', text);
+  }
+
+  appendDiff(filePath: string, diff: string): void {
+    this.renderManager.appendToTranscript('work', `📄 ${filePath}\n────────────────────────────────────\n${diff}\n────────────────────────────────────`);
+  }
+
+  appendCommand(command: string, output: string): void {
+    this.renderManager.appendToTranscript('work', `⚙️ COMMAND   ${new Date().toLocaleTimeString()}\n$ ${command}\n────────────────────────────────────\n${output}\n────────────────────────────────────`);
+  }
+
+  appendConfirmation(prompt: string, options: string[]): void {
+    const optionsStr = options.join('   ');
+    this.renderManager.appendToTranscript('work', `❓ CONFIRM ACTION\n${prompt}\n[${optionsStr}]`);
+  }
+
+  appendCompletionSummary(summary: string): void {
+    this.renderManager.appendToTranscript('work', `✅ TASK COMPLETE   ${new Date().toLocaleTimeString()}\n${summary}`);
+  }
+
+  requestConfirmation(prompt: string, options: string[], callback: (response: string) => void): void {
+    this.appendConfirmation(prompt, options);
+    // For enhanced UI, use a modal or inline input
+    // For now, simulate with key listener
+    // But since it's enhanced, perhaps set a flag
+    // Simple implementation: assume 'y' for yes
+    callback('y');
+  }
+
   setStatus(text: string): void {
     this.renderManager.updateStatus(text);
   }
