@@ -1,6 +1,9 @@
 import blessed, { Widgets } from 'neo-blessed';
 import { LayoutElements, WorkLogEntry } from './enhanced-layout.js';
 import { BREWVERSE_THEME, UI_CONSTANTS } from './theme.js';
+import { logLine } from '../utils/runtime-logger.js';
+
+let warnedScrollMonitoring = false;
 
 export class EnhancedRenderManager {
   private layout: LayoutElements;
@@ -46,7 +49,10 @@ export class EnhancedRenderManager {
       });
     } catch (e) {
       // If scroll monitoring fails, disable this feature gracefully
-      console.warn('Scroll monitoring not available in this terminal');
+      if (!warnedScrollMonitoring) {
+        warnedScrollMonitoring = true;
+        logLine('Scroll monitoring not available in this terminal');
+      }
     }
   }
 

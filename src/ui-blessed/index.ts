@@ -2,6 +2,7 @@ import { UIAdapter } from '../ui/adapter.js';
 import { createLayout, LayoutElements } from './layout.js';
 import { setupKeybindings } from './keymap.js';
 import { RenderManager } from './render.js';
+import { setUiActive } from '../utils/runtime-logger.js';
 
 export interface BlessedUIOptions {
   adapter?: UIAdapter;
@@ -12,6 +13,7 @@ export class BlessedUI {
   private layout: LayoutElements;
   private renderManager: RenderManager;
   private adapter!: UIAdapter;
+  private confirmCallback: ((response: string) => void) | null = null;
 
   getLayout(): LayoutElements {
     return this.layout;
@@ -27,6 +29,7 @@ export class BlessedUI {
     }
 
     this.layout = createLayout();
+    setUiActive(true);
     this.renderManager = new RenderManager(this.layout);
 
     this.setupKeybindings();
@@ -41,17 +44,22 @@ export class BlessedUI {
     setupKeybindings(
       this.layout,
       () => this.adapter.clearAll(),
-      () => this.adapter.shutdown(),
-      () => this.renderManager.toggleWorkLog()
+      () => this.adapter.shutdown()
     );
   }
 
   private setupInput(): void {
     this.layout.input.on('submit', async (text: string) => {
-      if (text.trim() === '/clear') {
-        this.adapter.clearAll();
+      if (this.confirmCallback) {
+        // Handle confirmation response
+        this.confirmCallback(text.trim().toLowerCase());
+        this.confirmCallback = null;
       } else {
-        await this.adapter.processUserMessage(text);
+        if (text.trim() === '/clear') {
+          this.adapter.clearAll();
+        } else {
+          await this.adapter.processUserMessage(text);
+        }
       }
       this.renderManager.clearInput();
       this.renderManager.focusInput();
@@ -60,24 +68,23 @@ export class BlessedUI {
   }
 
   // Methods called by adapter
-  appendToTranscript(text: string) {
-    this.renderManager.appendToTranscript(text);
+  appendToStream(text: string) {
+    this.renderManager.appendToStream(text);
   }
 
-  appendToWorkLog(text: string) {
-    this.renderManager.appendToWorkLog(text);
-  }
-
-  clearTranscript(): void {
-    this.renderManager.clearTranscript();
-  }
-
-  clearWorkLog(): void {
-    this.renderManager.clearWorkLog();
+  clearStream(): void {
+    this.renderManager.clearStream();
   }
 
   setStatus(text: string): void {
     this.renderManager.setStatus(text);
+  }
+
+  requestConfirmation(prompt: string, options: string[], callback: (response: string) => void): void {
+    this.confirmCallback = callback;
+    this.appendToStream(`❓ CONFIRM ACTION\n${prompt}\n[${options.join('   ')}]`);
+    // Focus input for response
+    this.renderManager.focusInput();
   }
 
   shutdown(): void {

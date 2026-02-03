@@ -18,7 +18,7 @@ export class BlessedAdapter implements UIAdapter {
   private flushBuffer() {
     if (this.streamBuffer.length > 0) {
       const content = this.streamBuffer.join('');
-      this.ui.appendToTranscript(`Assistant: ${content}`);
+      this.ui.appendToStream(`🤖 BrewGrok  ${new Date().toLocaleTimeString()}\n${content}`);
       this.streamBuffer = [];
     }
     if (this.flushTimer) {
@@ -42,7 +42,7 @@ export class BlessedAdapter implements UIAdapter {
   }
 
   appendUserMessage(text: string): void {
-    this.ui.appendToTranscript(`User: ${text}`);
+    this.ui.appendToStream(`👤 You  ${new Date().toLocaleTimeString()}\n> ${text}`);
   }
 
   startAssistantMessage(id: string): void {
@@ -57,6 +57,31 @@ export class BlessedAdapter implements UIAdapter {
     this.scheduleFlush();
   }
 
+  appendAssistantMessage(text: string): void {
+    this.ui.appendToStream(`🤖 BrewGrok  ${new Date().toLocaleTimeString()}\n${text}`);
+  }
+
+  appendDiff(filePath: string, diff: string): void {
+    this.ui.appendToStream(`📄 ${filePath}\n────────────────────────────────────\n${diff}\n────────────────────────────────────`);
+  }
+
+  appendCommand(command: string, output: string): void {
+    this.ui.appendToStream(`⚙️ COMMAND   ${new Date().toLocaleTimeString()}\n$ ${command}\n────────────────────────────────────\n${output}\n────────────────────────────────────`);
+  }
+
+  appendConfirmation(prompt: string, options: string[]): void {
+    const optionsStr = options.join('   ');
+    this.ui.appendToStream(`❓ CONFIRM ACTION\n${prompt}\n[${optionsStr}]`);
+  }
+
+  appendCompletionSummary(summary: string): void {
+    this.ui.appendToStream(`✅ TASK COMPLETE   ${new Date().toLocaleTimeString()}\n${summary}`);
+  }
+
+  requestConfirmation(prompt: string, options: string[], callback: (response: string) => void): void {
+    this.ui.requestConfirmation(prompt, options, callback);
+  }
+
   endAssistantMessage(id: string): void {
     this.flushBuffer(); // Flush remaining buffer
     const fullMessage = this.messageBuffer.get(id) || '';
@@ -66,7 +91,7 @@ export class BlessedAdapter implements UIAdapter {
 
   appendWork(event: string): void {
     this.flushBuffer(); // Flush before showing work
-    this.ui.appendToWorkLog(event);
+    this.ui.appendToStream(`🛠️ TOOL: ${event}   ${new Date().toLocaleTimeString()}\n────────────────────────────────────\n${event}\n────────────────────────────────────`);
   }
 
   setStatus(text: string): void {
@@ -75,8 +100,7 @@ export class BlessedAdapter implements UIAdapter {
 
   clearAll(): void {
     this.flushBuffer();
-    this.ui.clearTranscript();
-    this.ui.clearWorkLog();
+    this.ui.clearStream();
     this.messageBuffer.clear();
   }
 
