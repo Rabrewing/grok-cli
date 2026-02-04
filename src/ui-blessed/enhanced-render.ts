@@ -211,13 +211,13 @@ export class EnhancedRenderManager {
 
   focusInput(): void {
     this.queueRender(() => {
-      this.layout.input.focus();
+      this.layout.inputBox?.focus();
     });
   }
 
   clearInput(): void {
     this.queueRender(() => {
-      this.layout.input.clearValue();
+      this.layout.inputBox?.clearValue();
     });
   }
 

@@ -26,11 +26,13 @@ export interface LayoutElements {
   header?: Widgets.BoxElement;
   chat?: Widgets.BoxElement;
   worklog?: Widgets.BoxElement;
-  input: Widgets.TextboxElement;
+  inputBox: Widgets.TextboxElement;
   status?: Widgets.BoxElement;
   transcript?: Widgets.BoxElement;
   modelInfo?: Widgets.BoxElement;
   stream: Widgets.BoxElement;
+  timelineBox: Widgets.BoxElement;
+  confirmBar: Widgets.BoxElement;
 }
 
 export function createEnhancedLayout(): LayoutElements {
@@ -176,6 +178,10 @@ export function createEnhancedLayout(): LayoutElements {
     },
   });
 
+  const confirmBar = blessed.box({
+    hidden: true,
+  });
+
   // Transcript area inside chat pane
   const transcript = blessed.box({
     parent: chat,
@@ -199,10 +205,12 @@ export function createEnhancedLayout(): LayoutElements {
     header,
     chat,
     worklog,
-    input,
+    inputBox: input,
     status,
     transcript,
     modelInfo,
     stream: transcript,
+    timelineBox: transcript,
+    confirmBar: confirmBar,
   };
 }

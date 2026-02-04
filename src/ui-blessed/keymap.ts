@@ -4,9 +4,10 @@ import { LayoutElements } from './layout.js';
 export function setupKeybindings(
   layout: LayoutElements,
   onClear: () => void,
-  onShutdown: () => void
+  onShutdown: () => void,
+  onConfirmKey?: (key: string) => void
 ) {
-  const { screen, stream } = layout;
+  const { screen, timelineBox } = layout;
 
   screen.key(['C-c'], () => {
     onShutdown();
@@ -18,17 +19,40 @@ export function setupKeybindings(
   });
 
   screen.key(['pageup'], () => {
-    stream.scroll(-stream.height);
+    timelineBox.scroll(-timelineBox.height);
     screen.render();
   });
 
   screen.key(['pagedown'], () => {
-    stream.scroll(stream.height);
+    timelineBox.scroll(timelineBox.height);
+    screen.render();
+  });
+
+  screen.key(['C-u'], () => {
+    timelineBox.scroll(-timelineBox.height / 2);
+    screen.render();
+  });
+
+  screen.key(['C-d'], () => {
+    timelineBox.scroll(timelineBox.height / 2);
+    screen.render();
+  });
+
+  screen.key(['home'], () => {
+    timelineBox.setScrollPerc(0);
     screen.render();
   });
 
   screen.key(['end'], () => {
-    stream.setScrollPerc(100);
+    timelineBox.setScrollPerc(100);
     screen.render();
   });
+
+  // Confirm keys
+  if (onConfirmKey) {
+    screen.key(['y'], () => onConfirmKey('y'));
+    screen.key(['n'], () => onConfirmKey('n'));
+    screen.key(['a'], () => onConfirmKey('a'));
+    screen.key(['escape'], () => onConfirmKey('escape'));
+  }
 }

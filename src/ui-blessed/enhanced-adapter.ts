@@ -16,6 +16,7 @@ export class EnhancedBlessedAdapter implements UIAdapter {
   private processingStartTime: number = 0;
   private currentTokenCount: number = 0;
   private workLogIdCounter: number = 0;
+  private hasPrintedWelcome = false;
 
   constructor(ui: BlessedUI, agent: GrokAgent) {
     this.ui = ui;
@@ -178,6 +179,10 @@ export class EnhancedBlessedAdapter implements UIAdapter {
     this.renderManager.updateStatus(text);
   }
 
+  appendToolResult(tool: string, status: string, exitCode: number, stdout: string, stderr: string, duration: number): void {
+    // For enhanced, perhaps log or something
+  }
+
   // Enhanced work logging with rich metadata
   appendWorkEnhanced(toolName: string, args: any, result: any): void {
     this.flushBuffer();
@@ -275,12 +280,15 @@ export class EnhancedBlessedAdapter implements UIAdapter {
 
 
   showWelcome(model?: string): void {
+    if (this.hasPrintedWelcome) return;
+    this.hasPrintedWelcome = true;
+
     const welcomeText = `
 {bold}{#FFD700-fg}🌟 Welcome to BrewVerse Terminal!{/bold}
 
 {#E5E7EB-fg}You're now running the advanced Grok CLI with:}
   {#00C7B7-fg}✓{/} Anti-flicker streaming
-  {#00C7B7-fg}✓{/} Rich work visibility  
+  {#00C7B7-fg}✓{/} Rich work visibility
   {#00C7B7-fg}✓{/} Enhanced command system
   {#00C7B7-fg}✓{/} BrewVerse theming
 

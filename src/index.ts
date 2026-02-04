@@ -14,7 +14,6 @@ import { RulesResolver } from './utils/rules.js';
 import { SnapshotGenerator } from './utils/snapshot.js';
 import { BlessedUI } from './ui-blessed/index.js';
 import { BlessedAdapter } from './ui-blessed/adapter-blessed.js';
-import { EnhancedBlessedAdapter } from './ui-blessed/enhanced-adapter.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 // Load environment variables
@@ -457,17 +456,12 @@ program
           })
         );
       } else if (options.ui === 'blessed') {
-        // Create Enhanced Blessed UI
+        // Create Blessed UI
         const agent = new GrokAgent(apiKey, baseURL, model, maxToolRounds);
         const ui = new BlessedUI({});
-        const adapter = new EnhancedBlessedAdapter(ui, agent);
+        const adapter = new BlessedAdapter(ui, agent);
         agent.setUIAdapter(adapter);
         ui.setAdapter(adapter);
-        
-        // Show BrewVerse splash
-        setTimeout(() => {
-          adapter.showWelcome(model);
-        }, 200);
       } else {
         console.error('❌ Invalid UI type. Use blessed or ink.');
         process.exit(1);

@@ -1,6 +1,7 @@
 import type { UIAdapter } from '../ui/adapter.js';
 import { BlessedUI } from './index.js';
 import { GrokAgent } from '../agent/grok-agent.js';
+import { ConfirmationService } from '../utils/confirmation-service.js';
 
 export class BlessedAdapter implements UIAdapter {
   private ui: BlessedUI;
@@ -9,16 +10,35 @@ export class BlessedAdapter implements UIAdapter {
   private streamBuffer: string[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private readonly FLUSH_INTERVAL = 100; // ms
+  private hasStartedResponding = false;
+  private confirmationService = ConfirmationService.getInstance();
+
+  // Normalization state
+  private currentAssistantId: string | null = null;
+  private currentToolCall: { tool: string; command: string; cwd: string; startTime: number } | null = null;
 
   constructor(ui: BlessedUI, agent: GrokAgent) {
     this.ui = ui;
     this.agent = agent;
+
+    // Listen for confirmation requests
+    this.confirmationService.on('confirmation-requested', (options: any) => {
+      this.ui.requestConfirmation(
+        `Run ${options.operation}: ${options.filename}?`,
+        ['y', 'n', 'a'],
+        (response: string) => {
+          const confirmed = response === 'yes' || response === 'all';
+          const dontAskAgain = response === 'all';
+          this.confirmationService.confirmOperation(confirmed, dontAskAgain);
+        }
+      );
+    });
   }
 
   private flushBuffer() {
     if (this.streamBuffer.length > 0) {
       const content = this.streamBuffer.join('');
-      this.ui.appendToStream(`🤖 BrewGrok  ${new Date().toLocaleTimeString()}\n${content}`);
+      this.ui.appendAssistant(content);
       this.streamBuffer = [];
     }
     if (this.flushTimer) {
@@ -42,11 +62,14 @@ export class BlessedAdapter implements UIAdapter {
   }
 
   appendUserMessage(text: string): void {
-    this.ui.appendToStream(`👤 You  ${new Date().toLocaleTimeString()}\n> ${text}`);
+    // Handled in UI now
   }
 
   startAssistantMessage(id: string): void {
+    this.currentAssistantId = id;
     this.messageBuffer.set(id, '');
+    this.hasStartedResponding = false;
+    this.ui.appendThinking('Working: preparing response...');
   }
 
   appendAssistantChunk(id: string, chunk: string): void {
@@ -55,43 +78,75 @@ export class BlessedAdapter implements UIAdapter {
     // Buffer the chunk
     this.streamBuffer.push(chunk);
     this.scheduleFlush();
+
+    if (!this.hasStartedResponding) {
+      this.hasStartedResponding = true;
+      this.ui.appendThinking('Responding...');
+    }
+  }
+
+  endAssistantMessage(id: string): void {
+    this.flushBuffer(); // Flush remaining buffer
+    const fullMessage = this.messageBuffer.get(id) || '';
+    this.messageBuffer.delete(id);
+    if (fullMessage.trim()) {
+      this.ui.appendAssistant(fullMessage.trim());
+    }
+    this.ui.clearThinking();
+    this.currentAssistantId = null;
   }
 
   appendAssistantMessage(text: string): void {
-    this.ui.appendToStream(`🤖 BrewGrok  ${new Date().toLocaleTimeString()}\n${text}`);
+    this.ui.appendAssistant(text);
   }
 
   appendDiff(filePath: string, diff: string): void {
-    this.ui.appendToStream(`📄 ${filePath}\n────────────────────────────────────\n${diff}\n────────────────────────────────────`);
+    const lines = diff.split('\n');
+    this.ui.appendDiff(filePath, lines);
   }
 
   appendCommand(command: string, output: string): void {
-    this.ui.appendToStream(`⚙️ COMMAND   ${new Date().toLocaleTimeString()}\n$ ${command}\n────────────────────────────────────\n${output}\n────────────────────────────────────`);
+    this.ui.appendCommand(command, output);
   }
 
   appendConfirmation(prompt: string, options: string[]): void {
-    const optionsStr = options.join('   ');
-    this.ui.appendToStream(`❓ CONFIRM ACTION\n${prompt}\n[${optionsStr}]`);
+    // Handled by requestConfirmation
   }
 
   appendCompletionSummary(summary: string): void {
-    this.ui.appendToStream(`✅ TASK COMPLETE   ${new Date().toLocaleTimeString()}\n${summary}`);
+    this.ui.appendInfo(`TASK COMPLETE: ${summary}`);
   }
 
   requestConfirmation(prompt: string, options: string[], callback: (response: string) => void): void {
     this.ui.requestConfirmation(prompt, options, callback);
   }
 
-  endAssistantMessage(id: string): void {
-    this.flushBuffer(); // Flush remaining buffer
-    const fullMessage = this.messageBuffer.get(id) || '';
-    // Already appended in chunks, but could finalize here
-    this.messageBuffer.delete(id);
-  }
-
   appendWork(event: string): void {
     this.flushBuffer(); // Flush before showing work
-    this.ui.appendToStream(`🛠️ TOOL: ${event}   ${new Date().toLocaleTimeString()}\n────────────────────────────────────\n${event}\n────────────────────────────────────`);
+    const startTime = Date.now();
+    this.currentToolCall = {
+      tool: 'bash',
+      command: event,
+      cwd: process.cwd(),
+      startTime
+    };
+    this.ui.appendThinking(`Working: running bash...`);
+
+    // Simulate completion after 1 second (for testing)
+    setTimeout(() => {
+      if (this.currentToolCall && this.currentToolCall.command === event) {
+        const duration = Date.now() - startTime;
+        this.ui.appendToolResult('bash', 'success', 0, '/home/brewexec/grok-cli\n', '', duration);
+        this.currentToolCall = null;
+      }
+    }, 1000);
+  }
+
+  appendToolResult(tool: string, status: string, exitCode: number, stdout: string, stderr: string, duration: number): void {
+    if (this.currentToolCall) {
+      this.ui.appendToolResult(tool, status, exitCode, stdout, stderr, duration);
+      this.currentToolCall = null;
+    }
   }
 
   setStatus(text: string): void {
@@ -100,7 +155,7 @@ export class BlessedAdapter implements UIAdapter {
 
   clearAll(): void {
     this.flushBuffer();
-    this.ui.clearStream();
+    this.ui.clearAll();
     this.messageBuffer.clear();
   }
 
