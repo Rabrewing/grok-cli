@@ -142,6 +142,47 @@ export class BlessedUI {
       this.layout.screen.render();
     });
 
+    // Modal confirmation keys (instant, no enter needed)
+    this.layout.inputBox.key(['y'], () => {
+      if (this.confirmCallback) {
+        this.confirmCallback('yes');
+        this.renderManager.appendInfo('Decision: YES');
+        this.confirmCallback = null;
+        this.renderManager.hideConfirm();
+        this.uiState = 'idle';
+      }
+    });
+
+    this.layout.inputBox.key(['n'], () => {
+      if (this.confirmCallback) {
+        this.confirmCallback('no');
+        this.renderManager.appendInfo('Decision: NO');
+        this.confirmCallback = null;
+        this.renderManager.hideConfirm();
+        this.uiState = 'idle';
+      }
+    });
+
+    this.layout.inputBox.key(['a'], () => {
+      if (this.confirmCallback) {
+        this.confirmCallback('all');
+        this.renderManager.appendInfo('Decision: ALL');
+        this.confirmCallback = null;
+        this.renderManager.hideConfirm();
+        this.uiState = 'idle';
+      }
+    });
+
+    this.layout.inputBox.key(['escape'], () => {
+      if (this.confirmCallback) {
+        this.confirmCallback('cancel');
+        this.renderManager.appendInfo('Decision: CANCEL');
+        this.confirmCallback = null;
+        this.renderManager.hideConfirm();
+        this.uiState = 'idle';
+      }
+    });
+
     this.layout.inputBox.on('submit', async (text: string) => {
       if (this.isSubmitting) return; // Prevent double submit
 
@@ -224,7 +265,8 @@ export class BlessedUI {
     this.uiState = 'confirming';
     this.confirmCallback = callback;
     this.renderManager.showConfirm(prompt);
-    // Focus input for response
+    // Clear input and keep focus for modal key handling
+    this.layout.inputBox.setValue('');
     this.renderManager.focusInput();
   }
 
