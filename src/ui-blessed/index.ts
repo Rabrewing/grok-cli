@@ -40,6 +40,16 @@ export class BlessedUI {
     setUiActive(true);
     this.renderManager = new RenderManager(this.layout);
 
+    // Add wheel scroll events
+    this.layout.timelineBox.on('wheelup', () => {
+      this.layout.timelineBox.scroll(-3);
+      this.layout.screen.render();
+    });
+    this.layout.timelineBox.on('wheeldown', () => {
+      this.layout.timelineBox.scroll(3);
+      this.layout.screen.render();
+    });
+
     this.setupKeybindings();
     this.setupInput();
 
@@ -96,6 +106,39 @@ export class BlessedUI {
 
     this.layout.inputBox.key(['C-d'], () => {
       this.layout.timelineBox.scroll(this.layout.timelineBox.height / 2);
+      this.layout.screen.render();
+    });
+
+    // Additional scroll keys
+    this.layout.inputBox.key(['up'], () => {
+      this.layout.timelineBox.scroll(-1);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['down'], () => {
+      this.layout.timelineBox.scroll(1);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['j'], () => {
+      this.layout.timelineBox.scroll(1);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['k'], () => {
+      this.layout.timelineBox.scroll(-1);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['g'], () => {
+      if (this.layout.inputBox.getValue() === '') {
+        this.layout.timelineBox.setScrollPerc(0);
+        this.layout.screen.render();
+      }
+    });
+
+    this.layout.inputBox.key(['G'], () => {
+      this.layout.timelineBox.setScrollPerc(100);
       this.layout.screen.render();
     });
 

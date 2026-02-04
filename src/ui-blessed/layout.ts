@@ -27,6 +27,8 @@ export function createLayout(): LayoutElements {
     },
   });
 
+  screen.enableMouse();
+
   const timelineBox = blessed.box({
     top: 0,
     left: 0,
@@ -34,11 +36,13 @@ export function createLayout(): LayoutElements {
     height: '100%-4', // 3 for input + 1 for confirm
     scrollable: true,
     alwaysScroll: true,
+    mouse: true,
     tags: true, // Enable Blessed inline tags
     scrollbar: {
       ch: ' ',
       style: {
-        bg: 'blue',
+        bg: 'cyan', // BrewTeal approximate
+        fg: 'yellow', // BrewGold
       },
     },
     style: {
