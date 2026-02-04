@@ -5,6 +5,7 @@ export class RenderManager {
   private layout: LayoutElements;
   private eventKeys: Set<string> = new Set();
   private isThinkingVisible = false;
+  public isFirstAssistantInResponse = false;
 
   constructor(layout: LayoutElements) {
     this.layout = layout;
@@ -57,24 +58,19 @@ export class RenderManager {
   }
 
   appendAssistant(text: string) {
-    this.appendEvent('ASSISTANT', text);
-  }
-
-  appendBrewGrok(text: string) {
-    const timestamp = new Date().toLocaleTimeString();
-    const key = `BREWGROK:${text}:${Date.now()}`;
-    if (this.eventKeys.has(key)) return;
-    this.eventKeys.add(key);
-    if (this.eventKeys.size > 500) {
-      const first = this.eventKeys.values().next().value;
-      this.eventKeys.delete(first);
+    if (this.isFirstAssistantInResponse) {
+      // Show BrewGrok header once per response
+      let content = `{gold-fg}BrewGrok{/gold-fg}\n${text}`;
+      this.layout.timelineBox.pushLine(content);
+      this.layout.timelineBox.setScrollPerc(100);
+      this.layout.screen.render();
+      this.isFirstAssistantInResponse = false;
+    } else {
+      // Continuation without header
+      this.layout.timelineBox.pushLine(text);
+      this.layout.timelineBox.setScrollPerc(100);
+      this.layout.screen.render();
     }
-
-    let content = `{gold-fg}BrewGrok{/gold-fg}\n${text}`;
-
-    this.layout.timelineBox.pushLine(content);
-    this.layout.timelineBox.setScrollPerc(100);
-    this.layout.screen.render();
   }
 
   appendThinking(text: string) {

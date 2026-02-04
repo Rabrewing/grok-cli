@@ -19,7 +19,6 @@ export class BlessedUI {
   private hasPrintedWelcome = false;
   private isSubmitting = false;
   private uiState: UIState = 'idle';
-  private isFirstAssistantInResponse = false;
 
   getLayout(): LayoutElements {
     return this.layout;
@@ -112,7 +111,7 @@ export class BlessedUI {
 
   // Methods called by adapter
   startAssistantMessage(id: string): void {
-    this.isFirstAssistantInResponse = true;
+    this.renderManager.isFirstAssistantInResponse = true;
   }
 
   appendAssistantChunk(id: string, chunk: string): void {
@@ -144,12 +143,7 @@ export class BlessedUI {
   // Event appenders
   appendAssistant(text: string): void {
     this.uiState = 'responding';
-    if (this.isFirstAssistantInResponse) {
-      this.renderManager.appendBrewGrok(text);
-      this.isFirstAssistantInResponse = false;
-    } else {
-      this.renderManager.appendAssistant(text);
-    }
+    this.renderManager.appendAssistant(text);
   }
 
   appendThinking(text: string): void {
