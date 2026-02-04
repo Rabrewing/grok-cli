@@ -79,10 +79,11 @@ export function createLayout(): LayoutElements {
     inputOnFocus: true,
     style: {
       fg: 'white',
-      bg: 'blue',
+      bg: 'cyan', // BrewTeal
     },
     border: {
       type: 'line',
+      fg: 'yellow', // BrewGold
     },
     padding: {
       left: 1,
