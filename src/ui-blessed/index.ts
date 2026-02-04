@@ -68,6 +68,37 @@ export class BlessedUI {
   }
 
   private setupInput(): void {
+    // Scroll controls on input (since it's focused)
+    this.layout.inputBox.key(['pageup'], () => {
+      this.layout.timelineBox.scroll(-this.layout.timelineBox.height);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['pagedown'], () => {
+      this.layout.timelineBox.scroll(this.layout.timelineBox.height);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['home'], () => {
+      this.layout.timelineBox.setScrollPerc(0);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['end'], () => {
+      this.layout.timelineBox.setScrollPerc(100);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['C-u'], () => {
+      this.layout.timelineBox.scroll(-this.layout.timelineBox.height / 2);
+      this.layout.screen.render();
+    });
+
+    this.layout.inputBox.key(['C-d'], () => {
+      this.layout.timelineBox.scroll(this.layout.timelineBox.height / 2);
+      this.layout.screen.render();
+    });
+
     this.layout.inputBox.on('submit', async (text: string) => {
       if (this.isSubmitting) return; // Prevent double submit
 
