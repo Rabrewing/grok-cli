@@ -97,14 +97,43 @@ export class RenderManager {
   }
 
   appendDiff(filePath: string, diffLines: string[]) {
-    const truncated = diffLines.slice(0, 160);
-    let body = truncated.map(line => {
-      if (line.startsWith('-')) return `- ${line.slice(1)}`;
-      if (line.startsWith('+')) return `+ ${line.slice(1)}`;
-      return `  ${line}`;
-    }).join('\n');
-    if (diffLines.length > 160) body += '\n… (diff truncated)';
-    this.appendEvent('DIFF', filePath, body);
+    // Side-by-side diff view
+    const maxWidth = 35; // Max width per column
+    let oldLines: string[] = [];
+    let newLines: string[] = [];
+
+    for (const line of diffLines.slice(0, 160)) {
+      if (line.startsWith('-')) {
+        oldLines.push(line.slice(1));
+        newLines.push(''); // Empty for alignment
+      } else if (line.startsWith('+')) {
+        oldLines.push(''); // Empty for alignment
+        newLines.push(line.slice(1));
+      } else {
+        oldLines.push(line);
+        newLines.push(line);
+      }
+    }
+
+    // Create side-by-side layout
+    let diffOutput = `\n┌${'─'.repeat(maxWidth + 2)} OLD (-) ${'─'.repeat(maxWidth + 2)}┐ ┌${'─'.repeat(maxWidth + 2)} NEW (+) ${'─'.repeat(maxWidth + 2)}┐\n`;
+
+    const maxLines = Math.max(oldLines.length, newLines.length);
+    for (let i = 0; i < maxLines; i++) {
+      const oldLine = (oldLines[i] || '').padEnd(maxWidth);
+      const newLine = (newLines[i] || '').padEnd(maxWidth);
+
+      const oldColored = oldLine.trim() ? `{red-fg}${oldLine}{/red-fg}` : oldLine;
+      const newColored = newLine.trim() ? `{green-fg}${newLine}{/green-fg}` : newLine;
+
+      diffOutput += `│ ${oldColored} │ │ ${newColored} │\n`;
+    }
+
+    diffOutput += `└${'─'.repeat(maxWidth + 2 + 8)}┘ └${'─'.repeat(maxWidth + 2 + 8)}┘\n`;
+
+    if (diffLines.length > 160) diffOutput += '\n… (diff truncated)';
+
+    this.appendEvent('DIFF', filePath, diffOutput);
   }
 
   appendCommand(command: string, output: string): void {

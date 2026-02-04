@@ -48,6 +48,42 @@
 ### Normalization Changes
 - ✅ Added state tracking (currentAssistantId, currentToolCall) in BlessedAdapter
 - ✅ Internal events (THINKING, TOOL_CALL) buffered, not displayed directly
+
+---
+
+## G.E.P v2 Implementation Complete (2026-02-03)
+**Status:** All 3 steps delivered - Scrolling, Modal Confirmation, Theme Cleanup
+
+### Step 1: Scrolling Fixed (v0.0.35.5)
+- Enabled mouse/wheel support for touchscreen laptops
+- Added comprehensive keyboard scrolling (arrows, vim keys, g/G)
+- Scrollbar themed with BrewTeal/Gold
+- Full conversation history accessible
+
+### Step 2: Modal Confirmation (v0.0.35.6)
+- Instant y/n/a/esc keys without Enter
+- Input cleared and locked during modal
+- True modal UX with direct key routing
+- Tool execution blocked until confirmation
+
+### Step 3: Theme & Cleanup (v0.0.35.7)
+- Input highlight changed to BrewTeal (#00C7B7)
+- Blessed tag leakage fixed, clean rendering
+- Output noise reduced: summaries, single labels
+- Timestamps optional, minimal clutter
+
+### UX Spec v1.0 Captured
+- New spec saved to `brewdocs/blessed/UX_SPEC.md`
+- Comprehensive UX guidelines with acceptance criteria
+- Focus on stability before intelligence features
+- Timestamp: 2026-02-03T19:45:00Z
+
+### Changelog Updated
+- `brewdocs/blessed/CHANGELOG.md` created with full history
+- Incremental commits per step
+- Regression prevention documented
+
+**Final Status:** BrewGrok Blessed TUI stable and ready for production use.
 - ✅ Tool events collapsed into single TOOL_RESULT blocks with command, cwd, output
 - ✅ Assistant responses buffered and displayed as complete blocks
 - ✅ Interactive status: "Working: preparing..." → "Working: running bash..." → "Responding..." → cleared

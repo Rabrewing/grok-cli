@@ -342,6 +342,15 @@ export class BlessedUI {
         this.switchModel(argsString);
         break;
 
+      case 'timestamps':
+        const state = argsString.toLowerCase();
+        if (state === 'on' || state === 'off') {
+          this.renderManager.appendInfo(`Timestamps ${state} (not yet implemented)`);
+        } else {
+          this.renderManager.appendInfo('Usage: /timestamps on|off');
+        }
+        break;
+
       default:
         this.renderManager.appendInfo(`Unknown command: /${command}. Type /help for available commands.`);
         break;
@@ -378,12 +387,13 @@ Type a command and press Enter, or just press Enter to close this menu.
   private showHelp(): void {
     const helpText = `
 Available commands:
-/help, /h     - Show this help
-/clear        - Clear the conversation
-/models       - Show available models
-/model <name> - Switch model
-/work, /w     - Show work log summary
-/status       - Show current status
+/help, /h          - Show this help
+/clear             - Clear the conversation
+/models            - Show available models
+/model <name>      - Switch model
+/timestamps on|off - Toggle timestamps
+/work, /w          - Show work log summary
+/status            - Show current status
 
 Keyboard shortcuts:
 Ctrl+C        - Exit
