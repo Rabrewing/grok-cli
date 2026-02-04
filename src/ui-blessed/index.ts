@@ -21,6 +21,7 @@ export class BlessedUI {
   private uiState: UIState = 'idle';
   private commandHistory: string[] = [];
   private historyIndex = -1;
+  private commandPaletteShown = false;
 
   getLayout(): LayoutElements {
     return this.layout;
@@ -69,6 +70,13 @@ export class BlessedUI {
   private setupInput(): void {
     this.layout.inputBox.on('submit', async (text: string) => {
       if (this.isSubmitting) return; // Prevent double submit
+
+      if (text.trim() === '/') {
+        this.showCommandPalette();
+        this.renderManager.clearInput();
+        this.renderManager.focusInput();
+        return;
+      }
 
       if (this.confirmCallback) {
         // Handle confirmation response
@@ -222,6 +230,33 @@ export class BlessedUI {
         this.renderManager.appendInfo(`Unknown command: /${command}. Type /help for available commands.`);
         break;
     }
+  }
+
+  private showCommandPalette(): void {
+    const palette = `
+╔══════════════════════════════════════════════════════════════╗
+║                     Available Commands                      ║
+╠══════════════════════════════════════════════════════════════╣
+║ /help, /h     - Show detailed help                          ║
+║ /clear        - Clear the conversation                      ║
+║ /models       - Show available models                       ║
+║ /model <name> - Switch model                                ║
+║ /work, /w     - Show work log summary                       ║
+║ /status       - Show current status                         ║
+╠══════════════════════════════════════════════════════════════╣
+║                   Keyboard Shortcuts                        ║
+╠══════════════════════════════════════════════════════════════╣
+║ Ctrl+C        - Exit                                        ║
+║ Ctrl+L        - Clear conversation                          ║
+║ PageUp/Down   - Scroll                                      ║
+║ Home/End      - Scroll to top/bottom                        ║
+║ Up/Down       - Command history                             ║
+╚══════════════════════════════════════════════════════════════╝
+
+Type a command and press Enter, or just press Enter to close this menu.
+    `;
+    this.renderManager.appendInfo(palette);
+    this.commandPaletteShown = true;
   }
 
   private showHelp(): void {
