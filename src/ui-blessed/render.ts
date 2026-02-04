@@ -23,13 +23,13 @@ export class RenderManager {
 
     let content = '';
     if (type === 'USER') {
-      content += `{teal-fg}👤 User:{/teal-fg} ${title}`;
+      content += `{yellow-fg}👤 User:{/yellow-fg} ${title}`;
     } else if (type === 'ASSISTANT') {
       content += `{yellow-fg}🤖 Assistant:{/yellow-fg} ${title}`;
     } else if (type === 'TOOL_CALL') {
       content += `{blue-fg}🛠 Tool: ${title}{/blue-fg}`;
     } else if (type === 'TOOL_RESULT') {
-      content += `{blue-fg}🛠 Result:{/blue-fg} ${title}`;
+      content += `{yellow-fg}🛠 Result:{/yellow-fg} ${title}`;
     } else if (type === 'DIFF') {
       content += `{cyan-fg}📄 Diff: ${title}{/cyan-fg}`;
     } else if (type === 'COMMAND') {

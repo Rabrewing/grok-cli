@@ -341,6 +341,7 @@ program
     'ensures no file writes unless --apply or explicit interactive accept'
   )
   .option('--ui <type>', 'UI type: blessed or ink (default: blessed)', 'blessed')
+  .option('--debug-ui', 'enable debug mode showing raw events and timings')
   .option(
     '--max-tool-rounds <rounds>',
     'maximum number of tool execution rounds (default: 400)',
@@ -453,6 +454,7 @@ program
             fullFileMode: options.fullFiles || false,
             repoMode: isRepoMode,
             repoSnapshot: repoSnapshot || '',
+            debugUi: options.debugUi || false,
           })
         );
       } else if (options.ui === 'blessed') {

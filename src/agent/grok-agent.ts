@@ -21,6 +21,7 @@ import { createTokenCounter, TokenCounter } from "../utils/token-counter.js";
 import { loadCustomInstructions } from "../utils/custom-instructions.js";
 import { getSettingsManager } from "../utils/settings-manager.js";
 import { UIAdapter } from "../ui/adapter.js";
+import { ToolExecutor } from "./tool-executor.js";
 
 export interface ChatEntry {
   type: "user" | "assistant" | "tool_result" | "tool_call";
@@ -28,7 +29,7 @@ export interface ChatEntry {
   timestamp: Date;
   toolCalls?: GrokToolCall[];
   toolCall?: GrokToolCall;
-  toolResult?: { success: boolean; output?: string; error?: string };
+  toolResult?: { success: boolean; output?: string; error?: string; duration?: number };
   isStreaming?: boolean;
 }
 
@@ -43,12 +44,8 @@ export interface StreamingChunk {
 
 export class GrokAgent extends EventEmitter {
   private grokClient: GrokClient;
-  private textEditor: TextEditorTool;
-  private morphEditor: MorphEditorTool | null;
-  private bash: BashTool;
-  private todoTool: TodoTool;
+  private toolExecutor: ToolExecutor;
   private confirmationTool: ConfirmationTool;
-  private search: SearchTool;
   private chatHistory: ChatEntry[] = [];
   private messages: GrokMessage[] = [];
   private tokenCounter: TokenCounter;
@@ -75,12 +72,18 @@ export class GrokAgent extends EventEmitter {
     const modelToUse = model || savedModel || "grok-code-fast-1";
     this.maxToolRounds = maxToolRounds || 400;
     this.grokClient = new GrokClient(apiKey, modelToUse, baseURL);
-    this.textEditor = new TextEditorTool();
-    this.morphEditor = process.env.MORPH_API_KEY ? new MorphEditorTool() : null;
-    this.bash = new BashTool();
-    this.todoTool = new TodoTool();
+
+    // Initialize tools
+    const textEditor = new TextEditorTool();
+    const morphEditor = process.env.MORPH_API_KEY ? new MorphEditorTool() : null;
+    const bash = new BashTool();
+    const todoTool = new TodoTool();
+    const search = new SearchTool();
+
+    // Create tool executor
+    this.toolExecutor = new ToolExecutor(textEditor, morphEditor, bash, todoTool, search);
+
     this.confirmationTool = new ConfirmationTool();
-    this.search = new SearchTool();
     this.tokenCounter = createTokenCounter(modelToUse);
 
     // Initialize MCP servers if configured
@@ -101,7 +104,7 @@ You have access to these tools:
 - view_file: View file contents or directory listings
 - create_file: Create new files with content (ONLY use this for files that don't exist yet)
 - str_replace_editor: Replace text in existing files (ALWAYS use this to edit or update existing files)${
-        this.morphEditor
+        process.env.MORPH_API_KEY
           ? "\n- edit_file: High-speed file editing with Morph Fast Apply (4,500+ tokens/sec with 98% accuracy)"
           : ""
       }
@@ -279,7 +282,9 @@ Current working directory: ${process.cwd()}`,
 
           // Execute tool calls and update the entries
           for (const toolCall of assistantMessage.tool_calls) {
-            const result = await this.executeTool(toolCall);
+            const startTime = Date.now();
+            const result = await this.toolExecutor.executeTool(toolCall);
+            const duration = Date.now() - startTime;
 
             // Update the existing tool_call entry with the result
             const entryIndex = this.chatHistory.findIndex(
@@ -294,7 +299,7 @@ Current working directory: ${process.cwd()}`,
                 content: result.success
                   ? result.output || "Success"
                   : result.error || "Error occurred",
-                toolResult: result,
+                toolResult: { ...result, duration },
               };
               this.chatHistory[entryIndex] = updatedEntry;
 
@@ -579,7 +584,7 @@ Current working directory: ${process.cwd()}`,
               this.uiAdapter.appendWork(`Executing ${toolCall.function.name}...`);
             }
 
-            const result = await this.executeTool(toolCall);
+            const result = await this.toolExecutor.executeTool(toolCall);
 
             const toolResultEntry: ChatEntry = {
               type: "tool_result",
@@ -679,83 +684,7 @@ Current working directory: ${process.cwd()}`,
     }
   }
 
-  private async executeTool(toolCall: GrokToolCall): Promise<ToolResult> {
-    try {
-      const args = JSON.parse(toolCall.function.arguments);
 
-      switch (toolCall.function.name) {
-        case "view_file":
-          const range: [number, number] | undefined =
-            args.start_line && args.end_line
-              ? [args.start_line, args.end_line]
-              : undefined;
-          return await this.textEditor.view(args.path, range);
-
-        case "create_file":
-          return await this.textEditor.create(args.path, args.content);
-
-        case "str_replace_editor":
-          return await this.textEditor.strReplace(
-            args.path,
-            args.old_str,
-            args.new_str,
-            args.replace_all
-          );
-
-        case "edit_file":
-          if (!this.morphEditor) {
-            return {
-              success: false,
-              error:
-                "Morph Fast Apply not available. Please set MORPH_API_KEY environment variable to use this feature.",
-            };
-          }
-          return await this.morphEditor.editFile(
-            args.target_file,
-            args.instructions,
-            args.code_edit
-          );
-
-        case "bash":
-          return await this.bash.execute(args.command);
-
-        case "create_todo_list":
-          return await this.todoTool.createTodoList(args.todos);
-
-        case "update_todo_list":
-          return await this.todoTool.updateTodoList(args.updates);
-
-        case "search":
-          return await this.search.search(args.query, {
-            searchType: args.search_type,
-            includePattern: args.include_pattern,
-            excludePattern: args.exclude_pattern,
-            caseSensitive: args.case_sensitive,
-            wholeWord: args.whole_word,
-            regex: args.regex,
-            maxResults: args.max_results,
-            fileTypes: args.file_types,
-            includeHidden: args.include_hidden,
-          });
-
-        default:
-          // Check if this is an MCP tool
-          if (toolCall.function.name.startsWith("mcp__")) {
-            return await this.executeMCPTool(toolCall);
-          }
-
-          return {
-            success: false,
-            error: `Unknown tool: ${toolCall.function.name}`,
-          };
-      }
-    } catch (error: any) {
-      return {
-        success: false,
-        error: `Tool execution error: ${error.message}`,
-      };
-    }
-  }
 
   private async executeMCPTool(toolCall: GrokToolCall): Promise<ToolResult> {
     try {
@@ -800,11 +729,11 @@ Current working directory: ${process.cwd()}`,
   }
 
   getCurrentDirectory(): string {
-    return this.bash.getCurrentDirectory();
+    return this.toolExecutor.getCurrentDirectory();
   }
 
   async executeBashCommand(command: string): Promise<ToolResult> {
-    return await this.bash.execute(command);
+    return await this.toolExecutor.executeBashCommand(command);
   }
 
   getCurrentModel(): string {

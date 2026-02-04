@@ -614,6 +614,48 @@ Respond with ONLY the commit message, no additional text.`;
   };
 
   const processUserMessage = async (userInput: string) => {
+    // Handle commands
+    if (userInput.startsWith('/')) {
+      const command = userInput.slice(1).toLowerCase().trim();
+      switch (command) {
+        case 'exit':
+        case 'quit':
+          process.exit(0);
+          break;
+        case 'help':
+          const helpEntry: ChatEntry = {
+            type: "assistant",
+            content: `Available Commands:
+/help      - Show this help message
+/clear     - Clear chat history
+/exit      - Exit the application
+/quit      - Exit the application
+
+Keyboard Shortcuts:
+Ctrl+C     - Exit application
+Ctrl+L     - Clear chat history
+Shift+Tab  - Toggle auto-apply mode`,
+            timestamp: new Date(),
+          };
+          setChatHistory((prev) => [...prev, helpEntry]);
+          clearInput();
+          return;
+        case 'clear':
+          setChatHistory([]);
+          clearInput();
+          return;
+        default:
+          const errorEntry: ChatEntry = {
+            type: "assistant",
+            content: `Unknown command: /${command}. Type /help for available commands.`,
+            timestamp: new Date(),
+          };
+          setChatHistory((prev) => [...prev, errorEntry]);
+          clearInput();
+          return;
+      }
+    }
+
     const userEntry: ChatEntry = {
       type: "user",
       content: userInput,

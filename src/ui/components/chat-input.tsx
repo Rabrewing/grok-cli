@@ -42,8 +42,8 @@ export function ChatInput({
   }
 
   const showCursor = !isProcessing && !isStreaming;
-  const borderColor = isProcessing || isStreaming ? 'yellow' : 'blue';
-  const promptColor = 'cyan';
+  const borderColor = isProcessing || isStreaming ? '#FFD700' : '#00C7B7';
+  const promptColor = '#00C7B7';
 
   // Display placeholder when input is empty
   const placeholderText = 'Ask me anything...';

@@ -92,7 +92,7 @@ export default function ConfirmationDialog({
 
         <Box
           borderStyle="round"
-          borderColor="yellow"
+          borderColor="#FFD700"
           paddingX={1}
           marginTop={1}
         >

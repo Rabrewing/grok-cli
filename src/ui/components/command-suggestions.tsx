@@ -44,7 +44,7 @@ export function CommandSuggestions({
         <Box key={index} paddingLeft={1}>
           <Text
             color={index === selectedIndex ? "black" : "white"}
-            backgroundColor={index === selectedIndex ? "cyan" : undefined}
+            backgroundColor={index === selectedIndex ? "#00C7B7" : undefined}
           >
             {suggestion.command}
           </Text>

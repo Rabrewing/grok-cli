@@ -16,6 +16,7 @@ import {
 } from '../../utils/confirmation-service.js';
 import ApiKeyInput from './api-key-input.js';
 import { streamWriter } from '../stream-writer.js';
+import { TimelineRenderer } from '../timeline-renderer.js';
 import cfonts from 'cfonts';
 
 interface ChatInterfaceProps {
@@ -26,6 +27,7 @@ interface ChatInterfaceProps {
   fullFileMode?: boolean;
   repoMode?: boolean;
   repoSnapshot?: string;
+  debugUi?: boolean;
 }
 
 // Main chat component that handles input when agent is available
@@ -37,6 +39,7 @@ function ChatInterfaceWithAgent({
   fullFileMode = false,
   repoMode = false,
   repoSnapshot = '',
+  debugUi = false,
 }: {
   agent: GrokAgent;
   initialMessage?: string;
@@ -45,11 +48,13 @@ function ChatInterfaceWithAgent({
   fullFileMode?: boolean;
   repoMode?: boolean;
   repoSnapshot?: string;
+  debugUi?: boolean;
 }) {
   // Add streaming buffer to reduce React state updates
 
   
-  const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
+  const [timelineRenderer] = useState(() => new TimelineRenderer(debugUi));
+  const [chatHistory, setChatHistoryState] = useState<ChatEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingTime, setProcessingTime] = useState(0);
   const [tokenCount, setTokenCount] = useState(0);
@@ -59,8 +64,91 @@ function ChatInterfaceWithAgent({
     useState<ConfirmationOptions | null>(null);
   const scrollRef = useRef<any>();
   const processingStartTime = useRef<number>(0);
+  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const confirmationService = ConfirmationService.getInstance();
+
+  // Wrapper for setChatHistory that also updates timeline renderer
+  const setChatHistory = useCallback((updater: ChatEntry[] | ((prev: ChatEntry[]) => ChatEntry[])) => {
+    setChatHistoryState((prev) => {
+      const newHistory = typeof updater === 'function' ? updater(prev) : updater;
+
+      // Add new entries to timeline renderer
+      const prevIds = new Set(prev.map(entry => `${entry.type}_${entry.timestamp.getTime()}_${entry.content}`));
+      for (const entry of newHistory) {
+        const entryId = `${entry.type}_${entry.timestamp.getTime()}_${entry.content}`;
+        if (!prevIds.has(entryId)) {
+          const timelineEvent = TimelineRenderer.fromChatEntry(entry);
+          timelineRenderer.addEvent(timelineEvent);
+
+          // Check if this is a tool result that indicates file changes
+          if (entry.type === 'tool_result' && entry.toolResult?.success && entry.toolCall) {
+            const toolName = entry.toolCall.function.name;
+            if (toolName === 'str_replace_editor' || toolName === 'create_file') {
+              // Parse the diff from the output
+              const output = entry.toolResult.output || '';
+              const filePath = extractFilePathFromToolCall(entry.toolCall);
+
+              if (filePath && output.includes('@@')) {
+                // This looks like a diff, create a diff event
+                const changes = extractChangesFromDiff(output);
+                const diffEvent = TimelineRenderer.createDiffEvent(filePath, changes, output);
+                timelineRenderer.addEvent(diffEvent);
+              }
+            }
+          }
+        }
+      }
+
+      return newHistory;
+    });
+  }, [timelineRenderer]);
+
+  // Helper functions for diff event creation
+  const extractFilePathFromToolCall = (toolCall: any): string | null => {
+    try {
+      const args = JSON.parse(toolCall.function.arguments);
+      return args.path || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const extractChangesFromDiff = (diffOutput: string): { added: number; removed: number } => {
+    const lines = diffOutput.split('\n');
+    let added = 0;
+    let removed = 0;
+
+    for (const line of lines) {
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        added++;
+      } else if (line.startsWith('-') && !line.startsWith('---')) {
+        removed++;
+      }
+    }
+
+    return { added, removed };
+  };
+
+  // Show system notice for inactivity
+  const showInactivityNotice = useCallback(() => {
+    const systemNotice = TimelineRenderer.createSystemNotice('warning', 'No activity detected for 30 seconds. Request may have stalled.');
+    timelineRenderer.addEvent(systemNotice);
+  }, [timelineRenderer]);
+
+  // Clear inactivity timeout
+  const clearInactivityTimeout = useCallback(() => {
+    if (inactivityTimeoutRef.current) {
+      clearTimeout(inactivityTimeoutRef.current);
+      inactivityTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Set inactivity timeout
+  const setInactivityTimeout = useCallback(() => {
+    clearInactivityTimeout();
+    inactivityTimeoutRef.current = setTimeout(showInactivityNotice, 30000); // 30 seconds
+  }, [clearInactivityTimeout, showInactivityNotice]);
 
   const {
     input,
@@ -287,11 +375,15 @@ function ChatInterfaceWithAgent({
       setProcessingTime(0);
       // Unfreeze history when streaming ends
       setStreamFrozenHistory([]);
+      // Clear inactivity timeout
+      clearInactivityTimeout();
       return;
     }
 
     if (processingStartTime.current === 0) {
       processingStartTime.current = Date.now();
+      // Set inactivity timeout when processing starts
+      setInactivityTimeout();
     }
 
     // Freeze history when streaming starts to prevent repaints
@@ -306,7 +398,7 @@ function ChatInterfaceWithAgent({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isProcessing, isStreaming, chatHistory.length]);
+  }, [isProcessing, isStreaming, chatHistory.length, clearInactivityTimeout, setInactivityTimeout]);
 
   const handleConfirmation = (dontAskAgain?: boolean) => {
     confirmationService.confirmOperation(true, dontAskAgain);
@@ -330,7 +422,7 @@ function ChatInterfaceWithAgent({
       {/* Show tips only when no chat history and no confirmation dialog */}
       {chatHistory.length === 0 && !confirmationOptions && (
         <Box flexDirection="column" marginBottom={2}>
-          <Text color="cyan" bold>
+          <Text color="#00C7B7" bold>
             Tips for getting started:
           </Text>
           <Box marginTop={1} flexDirection="column">
@@ -358,7 +450,7 @@ function ChatInterfaceWithAgent({
 
       <Box flexDirection="column" ref={scrollRef}>
         <ChatHistory
-          entries={isStreaming ? streamFrozenHistory : chatHistory}
+          timelineRenderer={timelineRenderer}
           isConfirmationActive={!!confirmationOptions}
           isStreaming={isStreaming}
         />
@@ -436,6 +528,7 @@ export default function ChatInterface({
   fullFileMode = false,
   repoMode = false,
   repoSnapshot = '',
+  debugUi = false,
 }: ChatInterfaceProps) {
   const [currentAgent, setCurrentAgent] = useState<GrokAgent | null>(
     agent || null
@@ -458,6 +551,7 @@ export default function ChatInterface({
       fullFileMode={fullFileMode}
       repoMode={repoMode}
       repoSnapshot={repoSnapshot}
+      debugUi={debugUi}
     />
   );
 }

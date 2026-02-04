@@ -1,4 +1,5 @@
 import blessed from 'neo-blessed';
+import { BREWVERSE_THEME } from './theme.js';
 
 export interface LayoutElements {
   screen: blessed.Widgets.Screen;
@@ -41,8 +42,8 @@ export function createLayout(): LayoutElements {
     scrollbar: {
       ch: ' ',
       style: {
-        bg: 'cyan', // BrewTeal approximate
-        fg: 'yellow', // BrewGold
+        bg: BREWVERSE_THEME.colors.teal,
+        fg: BREWVERSE_THEME.colors.gold,
       },
     },
     style: {
@@ -78,12 +79,12 @@ export function createLayout(): LayoutElements {
     height: 3,
     inputOnFocus: true,
     style: {
-      fg: 'white',
-      bg: 'cyan', // BrewTeal
+      fg: BREWVERSE_THEME.colors.inputText, // BrewGold for input text
+      bg: BREWVERSE_THEME.colors.teal,       // BrewTeal background
     },
     border: {
       type: 'line',
-      fg: 'yellow', // BrewGold
+      fg: BREWVERSE_THEME.colors.gold,       // BrewGold border
     },
     padding: {
       left: 1,

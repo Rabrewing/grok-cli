@@ -1,11 +1,21 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { ChatEntry } from "../../agent/grok-agent.js";
+import { TimelineRenderer, TimelineEventGroup } from "../timeline-renderer.js";
 import { DiffRenderer } from "./diff-renderer.js";
 import { MarkdownRenderer } from "../utils/markdown-renderer.js";
 
+// Helper function to strip formatting tokens
+const stripFormatting = (content: string): string => {
+  return content
+    .replace(/\{[^}]+\}/g, '') // Remove {color} tags
+    .replace(/\[.*?\]/g, '')   // Remove [style] tags
+    .replace(/\\u001b\[[0-9;]*m/g, '') // Remove ANSI escape codes
+    .trim();
+};
+
 interface ChatHistoryProps {
-  entries: ChatEntry[];
+  timelineRenderer: TimelineRenderer;
   isConfirmationActive?: boolean;
   isStreaming?: boolean;
 }
@@ -212,30 +222,242 @@ const MemoizedChatEntry = React.memo(
 
 MemoizedChatEntry.displayName = "MemoizedChatEntry";
 
-export function ChatHistory({
-  entries,
-  isConfirmationActive = false,
-  isStreaming = false,
-}: ChatHistoryProps) {
-  // Filter out tool_call entries with "Executing..." when confirmation is active
-  const filteredEntries = isConfirmationActive
-    ? entries.filter(
-        (entry) =>
-          !(entry.type === "tool_call" && entry.content === "Executing...")
-      )
-    : entries;
+// Component to render a single timeline group
+function TimelineGroup({
+  group,
+  isConfirmationActive,
+}: {
+  group: TimelineEventGroup;
+  isConfirmationActive: boolean;
+}) {
+  const userData = group.userMessage.data as any;
+  const hasAssistantContent = group.assistantStage || group.toolActivity.length > 0 || group.results.length > 0;
 
-  // Apply render windowing - use reduced limit during streaming for better performance
-  const maxEntries = isStreaming ? MAX_ENTRIES_DURING_STREAMING : MAX_ENTRIES_RENDERED;
-  const visibleEntries = filteredEntries.slice(-maxEntries);
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      {/* User Message */}
+      <Box flexDirection="column">
+        <Text color="#00C7B7">┌─ User</Text>
+        <Text color="#00C7B7">│  {userData.content}</Text>
+        <Text color="#00C7B7">└──────────────────────────</Text>
+      </Box>
+
+      {/* Assistant Section */}
+      {hasAssistantContent && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="#FFD700">┌─ BrewGrok</Text>
+
+          {/* Assistant Stage */}
+          {group.assistantStage && (
+            <Text color="#FFD700">
+              │  {(group.assistantStage.data as any).description}
+            </Text>
+          )}
+
+          {/* Tool Activity */}
+          {group.toolActivity.length > 0 && (
+            <>
+              <Text color="#FFD700">│</Text>
+              {group.toolActivity.map((toolEvent, index) => (
+                <ToolActivityItem
+                  key={toolEvent.id}
+                  toolEvent={toolEvent}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Diff Preview */}
+          {group.diffPreviews.length > 0 && (
+            <>
+              <Text color="#FFD700">│</Text>
+              {group.diffPreviews.map((diffEvent, index) => (
+                <DiffPreviewItem
+                  key={diffEvent.id}
+                  diffEvent={diffEvent}
+                />
+              ))}
+            </>
+          )}
+
+          {/* System Notices */}
+          {group.systemNotices.length > 0 && (
+            <>
+              <Text color="#FFD700">│</Text>
+              {group.systemNotices.map((notice, index) => (
+                <SystemNoticeItem
+                  key={notice.id}
+                  notice={notice}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Results */}
+          {group.results.length > 0 && (
+            <>
+              <Text color="#FFD700">│</Text>
+              <Text color="#FFD700">
+                │  {(group.results[0].data as any).content}
+              </Text>
+            </>
+          )}
+
+          <Text color="#FFD700">└──────────────────────────</Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// Component to render individual tool activity
+function ToolActivityItem({
+  toolEvent,
+}: {
+  toolEvent: any;
+}) {
+  const invocationData = toolEvent.data as any;
+  const resultEvent = toolEvent; // For now, assume it's combined
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return '#00C7B7';
+      case 'failed': return 'red';
+      case 'running': return 'yellow';
+      default: return 'gray';
+    }
+  };
+
+  const status = invocationData.status || (invocationData.success !== undefined ? (invocationData.success ? 'completed' : 'failed') : 'running');
+  const duration = invocationData.duration ? `${invocationData.duration}ms` : '';
+  const toolName = invocationData.toolCall?.function?.name || 'unknown';
 
   return (
     <Box flexDirection="column">
-      {visibleEntries.map((entry, index) => (
-        <MemoizedChatEntry
-          key={`${entry.timestamp.getTime()}-${index}`}
-          entry={entry}
-          index={filteredEntries.length - maxEntries + index}
+      <Text color="#FFD700">
+        │  Tool: {toolName}     Status: {status}     {duration && `Duration: ${duration}`}
+      </Text>
+
+      {/* Command executed */}
+      {invocationData.toolCall?.function?.arguments && (
+        <Text color="#FFD700">
+          │     Command: {JSON.parse(invocationData.toolCall.function.arguments).command}
+        </Text>
+      )}
+
+      {/* Exit code */}
+      {invocationData.success !== undefined && (
+        <Text color="#FFD700">
+          │     Exit Code: {invocationData.success ? 0 : 1}
+        </Text>
+      )}
+
+      {/* Stdout/Stderr */}
+      {invocationData.output && (
+        <Box flexDirection="column">
+          <Text color="#FFD700">│     Output:</Text>
+          <Text color="gray">
+            │       {stripFormatting(invocationData.output).split('\n').slice(0, 5).join('\n│       ')}
+            {stripFormatting(invocationData.output).split('\n').length > 5 && '\n│       ...'}
+          </Text>
+        </Box>
+      )}
+
+      {invocationData.error && (
+        <Box flexDirection="column">
+          <Text color="#FFD700">│     Error:</Text>
+          <Text color="red">
+            │       {stripFormatting(invocationData.error).split('\n').slice(0, 3).join('\n│       ')}
+            {stripFormatting(invocationData.error).split('\n').length > 3 && '\n│       ...'}
+          </Text>
+        </Box>
+      )}
+
+      {/* Files affected */}
+      {invocationData.filesAffected && invocationData.filesAffected.length > 0 && (
+        <Text color="#FFD700">
+          │     Files: {invocationData.filesAffected.join(', ')}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+// Component to render individual diff preview
+function DiffPreviewItem({
+  diffEvent,
+}: {
+  diffEvent: any;
+}) {
+  const diffData = diffEvent.data as any;
+  const filePath = diffData.filePath;
+  const changes = diffData.changes;
+
+  return (
+    <Box flexDirection="column">
+      <Text color="#FFD700">
+        │  File modified: {filePath} +{changes.added} -{changes.removed}
+      </Text>
+
+      {diffData.diff && (
+        <Box flexDirection="column">
+          <Text color="#FFD700">│     Changes:</Text>
+          <Text color="gray">
+            │       {diffData.diff.split('\n').slice(0, 10).join('\n│       ')}
+            {diffData.diff.split('\n').length > 10 && '\n│       ...'}
+          </Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// Component to render system notices
+function SystemNoticeItem({
+  notice,
+}: {
+  notice: any;
+}) {
+  const noticeData = notice.data as any;
+  const level = noticeData.level;
+  const message = noticeData.message;
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'error': return 'red';
+      case 'warning': return 'yellow';
+      case 'info': return '#00C7B7';
+      default: return 'gray';
+    }
+  };
+
+  return (
+    <Box flexDirection="column">
+      <Text color={getLevelColor(level)}>
+        │  System: {message}
+      </Text>
+    </Box>
+  );
+}
+
+export function ChatHistory({
+  timelineRenderer,
+  isConfirmationActive = false,
+  isStreaming = false,
+}: ChatHistoryProps) {
+  const groups = timelineRenderer.getEventGroups();
+
+  // Apply render windowing - use reduced limit during streaming for better performance
+  const maxGroups = isStreaming ? 5 : 10;
+  const visibleGroups = groups.slice(-maxGroups);
+
+  return (
+    <Box flexDirection="column">
+      {visibleGroups.map((group) => (
+        <TimelineGroup
+          key={group.id}
+          group={group}
+          isConfirmationActive={isConfirmationActive}
         />
       ))}
     </Box>

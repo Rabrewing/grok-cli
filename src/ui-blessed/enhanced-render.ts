@@ -243,10 +243,51 @@ export class EnhancedRenderManager {
   }
 
   showTokenCount(count: number): void {
-    const status = count > 0 
+    const status = count > 0
       ? `📊 Tokens: ${count}`
       : '● Ready';
     this.updateStatus(status);
+  }
+
+  appendDiff(filePath: string, oldContent: string, newContent: string): void {
+
+    // Create side-by-side diff display
+    const oldLines = oldContent.split('\n');
+    const newLines = newContent.split('\n');
+    const maxLines = Math.max(oldLines.length, newLines.length);
+
+    // Pad shorter array
+    while (oldLines.length < maxLines) oldLines.push('');
+    while (newLines.length < maxLines) newLines.push('');
+
+    const diffLines: string[] = [];
+    diffLines.push(`📄 ${filePath}`);
+    diffLines.push(`┌──────────── OLD (-) ────────────┐ ┌──────────── NEW (+) ────────────┐`);
+    diffLines.push(`│                                 │ │                                 │`);
+
+    for (let i = 0; i < maxLines; i++) {
+      const oldLine = oldLines[i] || '';
+      const newLine = newLines[i] || '';
+      const isDifferent = oldLine !== newLine;
+
+      const oldDisplay = isDifferent ? `{red-fg}-${oldLine}{/red-fg}` : ` ${oldLine}`;
+      const newDisplay = isDifferent ? `{teal-fg}+${newLine}{/teal-fg}` : ` ${newLine}`;
+
+      const paddedOld = oldDisplay.padEnd(31, ' ');
+      const paddedNew = newDisplay.padEnd(31, ' ');
+
+      diffLines.push(`│${paddedOld}│ │${paddedNew}│`);
+    }
+
+    diffLines.push(`└─────────────────────────────────┘ └─────────────────────────────────┘`);
+    diffLines.push('');
+
+    const diffText = diffLines.join('\n');
+
+    this.queueRender(() => {
+      this.layout.transcript.pushLine(diffText);
+      this.layout.transcript.setScrollPerc(100);
+    });
   }
 
   render(): void {

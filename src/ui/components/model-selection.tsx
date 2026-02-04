@@ -23,13 +23,13 @@ export function ModelSelection({
   return (
     <Box marginTop={1} flexDirection="column">
       <Box marginBottom={1}>
-        <Text color="cyan">Select Grok Model (current: {currentModel}):</Text>
+        <Text color="#00C7B7">Select Grok Model (current: {currentModel}):</Text>
       </Box>
       {models.map((modelOption, index) => (
         <Box key={index} paddingLeft={1}>
           <Text
             color={index === selectedIndex ? "black" : "white"}
-            backgroundColor={index === selectedIndex ? "cyan" : undefined}
+            backgroundColor={index === selectedIndex ? "#00C7B7" : undefined}
           >
             {modelOption.model}
           </Text>

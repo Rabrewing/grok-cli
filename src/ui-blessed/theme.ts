@@ -4,6 +4,7 @@ export interface ColorPalette {
   border: string;
   textPrimary: string;
   textMuted: string;
+  inputText: string;
   gold: string;
   teal: string;
   red: string;
@@ -35,6 +36,7 @@ export const BREWVERSE_THEME: StyleTokens = {
     border: '#1F2937',          // soft line
     textPrimary: '#ffffff',       // bright white
     textMuted: '#9ca3af',        // muted gray
+    inputText: '#000000',         // Black for input text
     gold: '#ffd700',             // gold accent
     teal: '#00c7b7',            // teal accent
     red: '#ff5a5f',             // error red
