@@ -5,7 +5,9 @@ export function setupKeybindings(
   layout: LayoutElements,
   onClear: () => void,
   onShutdown: () => void,
-  onConfirmKey?: (key: string) => void
+  onConfirmKey?: (key: string) => void,
+  onHistoryUp?: () => string | null,
+  onHistoryDown?: () => string | null
 ) {
   const { screen, timelineBox } = layout;
 
@@ -47,6 +49,27 @@ export function setupKeybindings(
     timelineBox.setScrollPerc(100);
     screen.render();
   });
+
+  // History navigation
+  if (onHistoryUp) {
+    screen.key(['up'], () => {
+      const value = onHistoryUp();
+      if (value !== null) {
+        layout.inputBox.setValue(value);
+        screen.render();
+      }
+    });
+  }
+
+  if (onHistoryDown) {
+    screen.key(['down'], () => {
+      const value = onHistoryDown();
+      if (value !== null) {
+        layout.inputBox.setValue(value);
+        screen.render();
+      }
+    });
+  }
 
   // Confirm keys
   if (onConfirmKey) {

@@ -19,6 +19,8 @@ export class BlessedUI {
   private hasPrintedWelcome = false;
   private isSubmitting = false;
   private uiState: UIState = 'idle';
+  private commandHistory: string[] = [];
+  private historyIndex = -1;
 
   getLayout(): LayoutElements {
     return this.layout;
@@ -58,7 +60,9 @@ export class BlessedUI {
           this.confirmCallback = null;
           this.renderManager.hideConfirm();
         }
-      }
+      },
+      () => this.historyUp(),
+      () => this.historyDown()
     );
   }
 
@@ -87,10 +91,12 @@ export class BlessedUI {
         this.uiState = 'idle';
       } else {
         if (text.trim()) {
-          if (text.trim() === '/clear') {
-            this.adapter.clearAll();
+          if (text.trim().startsWith('/')) {
+            this.addToHistory(text.trim());
+            this.handleCommand(text.trim());
             this.uiState = 'idle';
           } else {
+            this.addToHistory(text.trim());
             // Clear input immediately on submit
             this.renderManager.clearInput();
             this.uiState = 'user_committed';
@@ -179,6 +185,120 @@ export class BlessedUI {
 
   appendInfo(title: string): void {
     this.renderManager.appendInfo(title);
+  }
+
+  private handleCommand(commandLine: string): void {
+    const [command, ...args] = commandLine.slice(1).split(' ');
+    const argsString = args.join(' ');
+
+    switch (command.toLowerCase()) {
+      case 'help':
+      case 'h':
+        this.showHelp();
+        break;
+
+      case 'clear':
+        this.adapter.clearAll();
+        break;
+
+      case 'models':
+        this.showModels();
+        break;
+
+      case 'work':
+      case 'w':
+        this.showWorkLog();
+        break;
+
+      case 'status':
+        this.showStatus();
+        break;
+
+      case 'model':
+        this.switchModel(argsString);
+        break;
+
+      default:
+        this.renderManager.appendInfo(`Unknown command: /${command}. Type /help for available commands.`);
+        break;
+    }
+  }
+
+  private showHelp(): void {
+    const helpText = `
+Available commands:
+/help, /h     - Show this help
+/clear        - Clear the conversation
+/models       - Show available models
+/model <name> - Switch model
+/work, /w     - Show work log summary
+/status       - Show current status
+
+Keyboard shortcuts:
+Ctrl+C        - Exit
+Ctrl+L        - Clear conversation
+PageUp/Down   - Scroll
+Home/End      - Scroll to top/bottom
+Up/Down       - Command history
+    `;
+    this.renderManager.appendInfo(helpText);
+  }
+
+  private showModels(): void {
+    const models = [
+      'grok-code-fast-1 (current)',
+      'grok-1',
+      'grok-beta'
+    ];
+    this.renderManager.appendInfo(`Available models:\n${models.join('\n')}\n\nUse /model <name> to switch`);
+  }
+
+  private showWorkLog(): void {
+    this.renderManager.appendInfo('Work log feature not fully implemented in blessed UI. Use enhanced UI for full work log.');
+  }
+
+  private showStatus(): void {
+    this.renderManager.appendInfo(`Status: Connected\nModel: grok-code-fast-1\nUI: Blessed Unified Stream\nState: ${this.uiState}`);
+  }
+
+  private switchModel(modelName: string): void {
+    if (!modelName) {
+      this.renderManager.appendInfo('Usage: /model <model-name>\nAvailable models: grok-code-fast-1, grok-1, grok-beta');
+      return;
+    }
+    // TODO: Implement model switching via adapter
+    this.renderManager.appendInfo(`Model switching not yet implemented. Requested: ${modelName}`);
+  }
+
+  private addToHistory(command: string): void {
+    if (this.commandHistory.length === 0 || this.commandHistory[this.commandHistory.length - 1] !== command) {
+      this.commandHistory.push(command);
+      if (this.commandHistory.length > 100) {
+        this.commandHistory.shift();
+      }
+    }
+    this.historyIndex = -1; // Reset for next navigation
+  }
+
+  private historyUp(): string | null {
+    if (this.commandHistory.length === 0) return null;
+    if (this.historyIndex === -1) {
+      this.historyIndex = this.commandHistory.length - 1;
+    } else if (this.historyIndex > 0) {
+      this.historyIndex--;
+    }
+    return this.commandHistory[this.historyIndex] || null;
+  }
+
+  private historyDown(): string | null {
+    if (this.historyIndex === -1) return null;
+    if (this.historyIndex < this.commandHistory.length - 1) {
+      this.historyIndex++;
+      return this.commandHistory[this.historyIndex];
+    } else {
+      this.historyIndex = -1;
+      return '';
+    }
   }
 
   shutdown(): void {
