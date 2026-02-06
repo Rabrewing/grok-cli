@@ -68,6 +68,12 @@ function ChatInterfaceWithAgent({
 
   const confirmationService = ConfirmationService.getInstance();
 
+  // Render counter to detect flicker-causing re-renders
+  const [renderCount, setRenderCount] = useState(0);
+  useEffect(() => {
+    setRenderCount(prev => prev + 1);
+  });
+
   // Wrapper for setChatHistory that also updates timeline renderer
   const setChatHistory = useCallback((updater: ChatEntry[] | ((prev: ChatEntry[]) => ChatEntry[])) => {
     setChatHistoryState((prev) => {
@@ -383,6 +389,8 @@ function ChatInterfaceWithAgent({
 
   return (
     <Box flexDirection="column" paddingX={2}>
+      {/* Debug render counter to detect flicker */}
+      <Text color="red" dimColor>Renders: {renderCount}</Text>
       {/* Show tips only when no chat history and no confirmation dialog */}
       {chatHistory.length === 0 && !confirmationOptions && (
         <Box flexDirection="column" marginBottom={2}>

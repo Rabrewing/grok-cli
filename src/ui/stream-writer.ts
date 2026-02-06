@@ -14,6 +14,13 @@ interface StreamSession {
 export class StreamWriter {
   private currentSession: StreamSession | null = null;
   private buffer: string = '';
+  private isInkMode: boolean;
+
+  constructor() {
+    // Detect if we're in Ink mode by checking process.argv
+    this.isInkMode = process.argv.includes('--ui') && 
+                    process.argv[process.argv.indexOf('--ui') + 1] === 'ink';
+  }
 
   /**
    * Start a new streaming session for assistant output
@@ -41,10 +48,17 @@ export class StreamWriter {
       return;
     }
 
+    // Skip direct stdout writes in Ink mode to prevent flicker
+    if (this.isInkMode) {
+      // Just buffer the text for React state updates
+      this.buffer += text.replace(/\r/g, ' ');
+      return;
+    }
+
     // Handle carriage returns safely by replacing with spaces
     const safeText = text.replace(/\r/g, ' ');
     
-    // Write directly to stdout without triggering React updates
+    // Write directly to stdout without triggering React updates (blessed mode only)
     process.stdout.write(safeText);
     
     // Keep internal buffer for final commit
