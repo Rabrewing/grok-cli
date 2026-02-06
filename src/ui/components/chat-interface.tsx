@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import { Box, Text, Static } from 'ink';
 import { GrokAgent, ChatEntry } from '../../agent/grok-agent.js';
 import { useInputHandler } from '../../hooks/use-input-handler.js';
@@ -68,9 +68,9 @@ function ChatInterfaceWithAgent({
 
   const confirmationService = ConfirmationService.getInstance();
 
-  // Render counter to detect flicker-causing re-renders
+  // Render counter to detect flicker-causing re-renders (FIXED - no infinite loop)
   const [renderCount, setRenderCount] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     setRenderCount(prev => prev + 1);
   });
 
@@ -368,7 +368,7 @@ function ChatInterfaceWithAgent({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isProcessing, isStreaming, chatHistory.length, clearInactivityTimeout, setInactivityTimeout]);
+  }, [isProcessing, isStreaming, clearInactivityTimeout, setInactivityTimeout]);
 
   const handleConfirmation = (dontAskAgain?: boolean) => {
     confirmationService.confirmOperation(true, dontAskAgain);
