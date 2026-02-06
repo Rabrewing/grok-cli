@@ -37,7 +37,7 @@ export function createLayout(): LayoutElements {
     height: '100%-4', // 3 for input + 1 for confirm
     scrollable: true,
     alwaysScroll: true,
-    mouse: true,
+    mouse: false, // Disable to allow terminal mouse selection for copying
     tags: true, // Enable Blessed inline tags
     scrollbar: {
       ch: ' ',

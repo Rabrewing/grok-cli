@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useInput } from "ink";
 import { GrokAgent, ChatEntry } from "../agent/grok-agent.js";
 import { ConfirmationService } from "../utils/confirmation-service.js";
@@ -48,6 +48,9 @@ export function useInputHandler({
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [showModelSelection, setShowModelSelection] = useState(false);
   const [selectedModelIndex, setSelectedModelIndex] = useState(0);
+
+  // Debounce ref for reducing rapid input updates that cause flickering
+  const inputDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [autoEditEnabled, setAutoEditEnabled] = useState(() => {
     const confirmationService = ConfirmationService.getInstance();
     const sessionFlags = confirmationService.getSessionFlags();

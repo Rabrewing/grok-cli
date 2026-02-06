@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { useCallback } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, Static } from 'ink';
 import { GrokAgent, ChatEntry } from '../../agent/grok-agent.js';
 import { useInputHandler } from '../../hooks/use-input-handler.js';
 import { LoadingSpinner } from './loading-spinner.js';
@@ -175,45 +175,6 @@ function ChatInterfaceWithAgent({
   });
 
   useEffect(() => {
-    // Only clear console on non-Windows platforms or if not PowerShell
-    // Windows PowerShell can have issues with console.clear() causing flickering
-    const isWindows = process.platform === 'win32';
-    const isPowerShell =
-      process.env.ComSpec?.toLowerCase().includes('powershell') ||
-      process.env.PSModulePath !== undefined;
-
-    if (!isWindows || !isPowerShell) {
-      console.clear();
-    }
-
-    // Add top padding
-    console.log('    ');
-
-    // Generate logo with margin to match Ink paddingX={2}
-    const logoOutput = cfonts.render('GROK', {
-      font: '3d',
-      align: 'left',
-      colors: ['magenta', 'gray'],
-      space: true,
-      maxLength: '0',
-      gradient: ['magenta', 'cyan'],
-      independentGradient: false,
-      transitionGradient: true,
-      env: 'node',
-    });
-
-    // Add horizontal margin (2 spaces) to match Ink paddingX={2}
-    const logoLines = (logoOutput as any).string.split('\n');
-    logoLines.forEach((line: string) => {
-      if (line.trim()) {
-        console.log(' ' + line); // Add 2 spaces for horizontal margin
-      } else {
-        console.log(line); // Keep empty lines as-is
-      }
-    });
-
-    console.log(' '); // Spacing after logo
-
     setChatHistory([]);
   }, []);
 
@@ -228,6 +189,9 @@ function ChatInterfaceWithAgent({
       setChatHistory([userEntry]);
 
       const processInitialMessage = async () => {
+        // In headless mode (initial message provided), auto-approve all confirmations
+        confirmationService.setSessionFlag('allOperations', true);
+
         setIsProcessing(true);
         setIsStreaming(true);
 
@@ -449,7 +413,7 @@ function ChatInterfaceWithAgent({
       </Box>
 
       <Box flexDirection="column" ref={scrollRef}>
-        <ChatHistory
+        <ChatHistoryMemo
           timelineRenderer={timelineRenderer}
           isConfirmationActive={!!confirmationOptions}
           isStreaming={isStreaming}
@@ -476,7 +440,7 @@ function ChatInterfaceWithAgent({
             tokenCount={tokenCount}
           />
 
-          <ChatInput
+          <ChatInputMemo
             input={input}
             cursorPosition={cursorPosition}
             isProcessing={isProcessing}
@@ -518,6 +482,10 @@ function ChatInterfaceWithAgent({
     </Box>
   );
 }
+
+// Memoized ChatHistory to prevent unnecessary re-renders
+const ChatHistoryMemo = memo(ChatHistory);
+const ChatInputMemo = memo(ChatInput);
 
 // Main component that handles API key input or chat interface
 export default function ChatInterface({

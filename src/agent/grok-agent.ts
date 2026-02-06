@@ -34,7 +34,7 @@ export interface ChatEntry {
 }
 
 export interface StreamingChunk {
-  type: "content" | "tool_calls" | "tool_result" | "done" | "token_count";
+  type: "content" | "tool_calls" | "tool_result" | "done" | "token_count" | "tool_plan";
   content?: string;
   toolCalls?: GrokToolCall[];
   toolCall?: GrokToolCall;
@@ -53,9 +53,16 @@ export class GrokAgent extends EventEmitter {
   private mcpInitialized: boolean = false;
   private maxToolRounds: number;
   private uiAdapter: UIAdapter | null = null;
+  private batchMode: boolean = false;
 
   setUIAdapter(adapter: UIAdapter) {
     this.uiAdapter = adapter;
+    // Enable batch mode for Blessed TUI
+    this.batchMode = adapter.constructor.name === 'BlessedAdapter';
+  }
+
+  async executeToolCall(toolCall: GrokToolCall) {
+    return this.toolExecutor.executeTool(toolCall);
   }
 
   constructor(
@@ -410,6 +417,7 @@ Current working directory: ${process.cwd()}`,
   ): AsyncGenerator<StreamingChunk, void, unknown> {
     // Create new abort controller for this request
     this.abortController = new AbortController();
+    const collectedToolCalls: GrokToolCall[] = [];
 
     // Add user message to conversation
     const userEntry: ChatEntry = {
@@ -567,63 +575,68 @@ Current working directory: ${process.cwd()}`,
             };
           }
 
-          // Execute tools
+          // Execute tools or collect for batch
           for (const toolCall of accumulatedMessage.tool_calls) {
-            // Check for cancellation before executing each tool
-            if (this.abortController?.signal.aborted) {
-              yield {
-                type: "content",
-                content: "\n\n[Operation cancelled by user]",
-              };
-              yield { type: "done" };
-              return;
-            }
-
-            // UI Adapter: append work event
-            if (this.uiAdapter) {
-              this.uiAdapter.appendWork(`Executing ${toolCall.function.name}...`);
-            }
-
-            const result = await this.toolExecutor.executeTool(toolCall);
-
-            const toolResultEntry: ChatEntry = {
-              type: "tool_result",
-              content: result.success
-                ? result.output || "Success"
-                : result.error || "Error occurred",
-              timestamp: new Date(),
-              toolCall: toolCall,
-              toolResult: result,
-            };
-            this.chatHistory.push(toolResultEntry);
-
-            yield {
-              type: "tool_result",
-              toolCall,
-              toolResult: result,
-            };
-
-            // UI Adapter: append work log with enhanced details
-            if (this.uiAdapter) {
-              const args = JSON.parse(toolCall.function.arguments);
-              const basicMessage = this.getWorkLogMessage(toolCall.function.name, args, result);
-              
-              // Try enhanced adapter first, fall back to basic
-              if (typeof (this.uiAdapter as any).appendWorkEnhanced === 'function') {
-                (this.uiAdapter as any).appendWorkEnhanced(toolCall.function.name, args, result);
-              } else {
-                this.uiAdapter.appendWork(basicMessage);
+            if (this.batchMode) {
+              // Collect for batch processing
+              collectedToolCalls.push(toolCall);
+            } else {
+              // Check for cancellation before executing each tool
+              if (this.abortController?.signal.aborted) {
+                yield {
+                  type: "content",
+                  content: "\n\n[Operation cancelled by user]",
+                };
+                yield { type: "done" };
+                return;
               }
-            }
 
-            // Add tool result with proper format (needed for AI context)
-            this.messages.push({
-              role: "tool",
-              content: result.success
-                ? result.output || "Success"
-                : result.error || "Error",
-              tool_call_id: toolCall.id,
-            });
+              // UI Adapter: append work event
+              if (this.uiAdapter) {
+                this.uiAdapter.appendWork(`Executing ${toolCall.function.name}...`);
+              }
+
+              const result = await this.toolExecutor.executeTool(toolCall);
+
+              const toolResultEntry: ChatEntry = {
+                type: "tool_result",
+                content: result.success
+                  ? result.output || "Success"
+                  : result.error || "Error occurred",
+                timestamp: new Date(),
+                toolCall: toolCall,
+                toolResult: result,
+              };
+              this.chatHistory.push(toolResultEntry);
+
+              yield {
+                type: "tool_result",
+                toolCall,
+                toolResult: result,
+              };
+
+              // UI Adapter: append work log with enhanced details
+              if (this.uiAdapter) {
+                const args = JSON.parse(toolCall.function.arguments);
+                const basicMessage = this.getWorkLogMessage(toolCall.function.name, args, result);
+                
+                // Try enhanced adapter first, fall back to basic
+                if (typeof (this.uiAdapter as any).appendWorkEnhanced === 'function') {
+                  (this.uiAdapter as any).appendWorkEnhanced(toolCall.function.name, args, result);
+                } else {
+                  this.uiAdapter.appendWork(basicMessage);
+                }
+              }
+
+              // Add tool result with proper format (needed for AI context)
+              this.messages.push({
+                role: "tool",
+                content: result.success
+                  ? result.output || "Success"
+                  : result.error || "Error",
+                tool_call_id: toolCall.id,
+              });
+            }
           }
 
           // Update token count after processing all tool calls to include tool results
@@ -652,6 +665,14 @@ Current working directory: ${process.cwd()}`,
           type: "content",
           content:
             "\n\nMaximum tool execution rounds reached. Stopping to prevent infinite loops.",
+        };
+      }
+
+      // In batch mode, yield collected tool calls for planning
+      if (this.batchMode && collectedToolCalls.length > 0) {
+        yield {
+          type: "tool_plan",
+          toolCalls: collectedToolCalls,
         };
       }
 

@@ -1,10 +1,14 @@
 import blessed from 'neo-blessed';
 import { LayoutElements } from './layout.js';
+import { preventDirectRendering } from './unified-renderer.js';
 
 export class RenderManager {
   private layout: LayoutElements;
   private eventKeys: Set<string> = new Set();
   private isThinkingVisible = false;
+  private thinkingStatusLine: string = '';
+  private thinkingAnimationFrame = 0;
+  private thinkingInterval: NodeJS.Timeout | null = null;
   public isFirstAssistantInResponse = false;
 
   constructor(layout: LayoutElements) {
@@ -39,7 +43,8 @@ export class RenderManager {
     } else if (type === 'INFO') {
       content += `{gray-fg}ℹ️ ${title}{/gray-fg}`;
     } else if (type === 'THINKING') {
-      content += `{yellow-fg}🤖 ${title}{/yellow-fg}`;
+      this.updateThinkingStatus(title);
+      return; // Don't add to timeline
     } else {
       content += `${type}: ${title}`;
     }
@@ -152,10 +157,23 @@ export class RenderManager {
   }
 
   showConfirm(prompt: string) {
-    const content = `\n────────────────────────────────\nBrewGrok\nI’m about to ${prompt}\n\nProceed?\n[Y] Yes   [N] No   [A] Yes to all   [Esc] Cancel\n────────────────────────────────\n`;
+    const content = `{gold-fg}
+┌─ CONFIRMATION REQUIRED ─────────────────────┐
+│ {teal-fg}BrewGrok needs your permission:{/gold-fg}           │
+│                                                │
+│  {#9CA3AF-fg}${this.truncateText(prompt, 45)}{/}              │
+│                                                │
+│  {teal-fg}[Y] Yes{/} {#9CA3AF-fg}or {teal-fg}[Enter]{/#9CA3AF-fg}   {red-fg}[N] No{/}   {gold-fg}[A] Yes to all{/}   {#9CA3AF-fg}[Esc] Cancel{/#9CA3AF-fg}  │
+│                                                │
+└────────────────────────────────────────────────┘{/}`;
     this.layout.timelineBox.pushLine(content);
     this.layout.timelineBox.setScrollPerc(100);
     this.layout.screen.render();
+  }
+
+  private truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 3) + '...';
   }
 
   hideConfirm() {
@@ -179,5 +197,46 @@ export class RenderManager {
 
   render() {
     this.layout.screen.render();
+  }
+
+  /**
+   * Update live thinking status indicator
+   */
+  private updateThinkingStatus(status: string): void {
+    this.thinkingStatusLine = status;
+    this.startThinkingAnimation();
+  }
+
+  /**
+   * Start live thinking animation
+   */
+  private startThinkingAnimation(): void {
+    if (this.thinkingInterval) {
+      clearInterval(this.thinkingInterval);
+    }
+
+    this.thinkingAnimationFrame = 0;
+    const dots = ['   ', '.  ', '.. ', '...'];
+
+    this.thinkingInterval = setInterval(() => {
+      const dot = dots[this.thinkingAnimationFrame % dots.length];
+      const statusText = `{#FFD700-fg}BrewGrok is thinking${dot}{/}`;
+
+      // Update screen title with thinking status
+      this.layout.screen.title = `BrewGrok CLI - ${this.thinkingStatusLine}`;
+
+      this.thinkingAnimationFrame++;
+    }, 500);
+  }
+
+  /**
+   * Stop thinking animation
+   */
+  stopThinking(): void {
+    if (this.thinkingInterval) {
+      clearInterval(this.thinkingInterval);
+      this.thinkingInterval = null;
+    }
+    this.layout.screen.title = `BrewGrok CLI - Unified Stream`;
   }
 }

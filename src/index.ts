@@ -3,6 +3,7 @@ import React from 'react';
 import { render } from 'ink';
 import { program, Command } from 'commander';
 import * as dotenv from 'dotenv';
+import cfonts from 'cfonts';
 import { GrokAgent } from './agent/grok-agent.js';
 import ChatInterface from './ui/components/chat-interface.js';
 import { getSettingsManager } from './utils/settings-manager.js';
@@ -18,6 +19,51 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat';
 
 // Load environment variables
 dotenv.config();
+
+/**
+ * Render Grok logo to console before Ink UI starts
+ * This prevents interference with Ink's rendering pipeline
+ */
+function renderGrokLogo(): void {
+  // Only clear console on non-Windows platforms or if not PowerShell
+  // Windows PowerShell can have issues with console.clear() causing flickering
+  const isWindows = process.platform === 'win32';
+  const isPowerShell =
+    process.env.ComSpec?.toLowerCase().includes('powershell') ||
+    process.env.PSModulePath !== undefined;
+
+  if (!isWindows || !isPowerShell) {
+    console.clear();
+  }
+
+  // Add top padding
+  console.log('    ');
+
+  // Generate logo with margin to match Ink paddingX={2}
+  const logoOutput = cfonts.render('GROK', {
+    font: '3d',
+    align: 'left',
+    colors: ['magenta', 'gray'],
+    space: true,
+    maxLength: '0',
+    gradient: ['magenta', 'cyan'],
+    independentGradient: false,
+    transitionGradient: true,
+    env: 'node',
+  });
+
+  // Add horizontal margin (2 spaces) to match Ink paddingX={2}
+  const logoLines = (logoOutput as any).string.split('\n');
+  logoLines.forEach((line: string) => {
+    if (line.trim()) {
+      console.log(' ' + line); // Add 2 spaces for horizontal margin
+    } else {
+      console.log(line); // Keep empty lines as-is
+    }
+  });
+
+  console.log(' '); // Spacing after logo
+}
 
 // Disable default SIGINT handling to let Ink handle Ctrl+C
 // We'll handle exit through the input system instead
@@ -445,6 +491,30 @@ program
         : message;
 
       if (options.ui === 'ink') {
+        // Render logo before Ink UI starts to prevent interference
+        renderGrokLogo();
+
+        // Anti-flicker configuration for Ink UI
+        const inkOptions = {
+          // Throttle renders to reduce flickering (16ms = ~60fps)
+          renderThrottle: 16,
+
+          // Enable experimental features for smoother rendering
+          experimental: true,
+
+          // Patch console methods to prevent interference
+          patchConsole: false,
+
+          // Exit on Ctrl+C without showing error
+          exitOnCtrlC: false,
+
+          // Additional anti-flicker settings
+          // Reduce stdout writes during rapid updates
+          stdout: process.stdout,
+          stdin: process.stdin,
+          stderr: process.stderr,
+        };
+
         render(
           React.createElement(ChatInterface, {
             agent,
@@ -455,7 +525,8 @@ program
             repoMode: isRepoMode,
             repoSnapshot: repoSnapshot || '',
             debugUi: options.debugUi || false,
-          })
+          }),
+          inkOptions
         );
       } else if (options.ui === 'blessed') {
         // Create Blessed UI

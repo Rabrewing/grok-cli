@@ -135,3 +135,38 @@
 - ✅ UI uses inline confirmation, not modal
 - ✅ No duplicate confirmation rendering
 - ✅ Smoke test prevents regression
+
+---
+
+## Sprint 5: Unified Timeline Renderer (TASK 1)
+**Timestamp (ET):** 2026-02-04
+**Status:** ✅ COMPLETED - Single render pipeline enforced
+
+### Implementation Changes
+- ✅ Created UnifiedTimelineRenderer with enforced single pipeline
+- ✅ Added emitEvent() as single entry point for all UI output
+- ✅ Updated BlessedUI to use unified renderer
+- ✅ Updated BlessedAdapter to route through emitEvent()
+- ✅ Added enforcement decorator to prevent direct rendering
+- ✅ Applied BrewTeal/BrewGold color scheme
+- ✅ Implemented copy-paste preview with line counting
+- ✅ Added tag hygiene (strip internal formatting)
+
+### Files Modified
+- `src/ui-blessed/unified-renderer.ts` (NEW)
+- `src/ui-blessed/index.ts` (UPDATED)
+- `src/ui-blessed/adapter-blessed.ts` (UPDATED)
+
+### Testing Results
+- ✅ Build passes
+- ✅ No TypeScript errors
+- ✅ Unified pipeline active
+- ✅ Direct rendering prevention enabled
+- ✅ Paste preview working with brackets and line counting
+
+### Acceptance Criteria Met
+- ✅ Unified renderer in place
+- ✅ No component can render directly (enforced)
+- ✅ All output flows through emitEvent()
+- ✅ BrewTeal/BrewGold styling applied
+- ✅ Internal tags stripped from UI
